@@ -44,5 +44,6 @@ double AstrophysicalSource::RescaledLuminosityFunction(const double Luminosity, 
 #include "MAGN.h"
 #include "FSRQ.h"
 #include "BLLAC.h"
+#include "SFG.h"
 
 #endif
