@@ -49,11 +49,12 @@ private:
 	// For Astrophysical Sources
 	void calculateIntensityAndAutocorrelation(AstrophysicalSource* source,const  std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
 	void ObtainSoverLMapping(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl_spline2d>& SoverLSpline, std::shared_ptr<gsl_interp_accel>& zAcc, std::shared_ptr<gsl_interp_accel>& GammaAcc);
+	void ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl_spline2d>& SoverLSpline, std::shared_ptr<gsl_interp_accel>& zAcc, std::shared_ptr<gsl_interp_accel>& GammaAcc);
 	std::vector<double> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl_spline2d>& SoverLSpline, std::shared_ptr<gsl_interp_accel>& zAcc, std::shared_ptr<gsl_interp_accel>& GammaAcc);
 };
 Benchmark::Benchmark(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<Detector> _D, bool log, bool plot )  : m_log(log), m_plot(plot),  CM(_CM), D(_D)
 {
-	LuminosityBounds.first = 1e9; LuminosityBounds.second = 1e15;
+	LuminosityBounds.first = 1e1; LuminosityBounds.second = 1e15;
 	if(m_plot)
 	{
 		dIdzCanvas = std::make_shared<TCanvas>("dIdz", "dI/dz");
