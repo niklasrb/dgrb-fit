@@ -40,7 +40,7 @@ void Benchmark::calculateIntensityAndAutocorrelation(AstrophysicalSource* source
 {
 	assert(source != NULL);
 	
-	std::vector<double> SGrid;       // <- Implement somewhere else
+	std::vector<double> SGrid = {0, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3};       // <- Implement somewhere else
 	
 
 	assert(zGrid.size() >= 1);
@@ -61,7 +61,47 @@ void Benchmark::calculateIntensityAndAutocorrelation(AstrophysicalSource* source
 	std::cout<< "Going into ObtaindNoverdS" << std::endl; //std::cin >> dummy;
 	ObtaindNoverdS(source, SGrid, GammaGrid, SoverLSpline, zAcc, GammaAcc);
 	
+	/// Calculate Intensity and autocorrelation for different Energy bins
+	std::vector<double> Intensity; Intensity.resize(EBins.size());
+	std::vector<double> Autocorrelation; Autocorrelation.resize(EBins.size());
 	
+	TF1* SbdNdS = new TF1((std::string("Integrand S^b * dN/dS for ") + source->Name).c_str(),
+						[source] (double* args, double* params) // args[0]: S   params[0]: Gamma  params[1]: b
+						{ 	return powf(args[0], params[1]) * source->dNoverdS( args[0], params[0], NULL); },
+						0,/*range*/ 100 , 2/*npar*/);  													// check range
+						
+	
+	
+	for(unsigned int i = 0; i < EBins.size(); i++)
+	{
+		TSpline3* S_tSpline = new TSpline3((std::string("Spline for S_t for a fixed Energy Bin for ") + source->Name).c_str(),
+											(double*) GammaGrid.data(), &S_t[i*GammaGrid.size()], GammaGrid.size());  // because the values for different Gammas are consecutive in memory
+		TF1* GammaIntegrand = new TF1((std::string("Integrated S^alpha * dN/dS for ") + source->Name).c_str(),
+										[source, SbdNdS, S_tSpline] (double* args, double* params) // args[0]: Gamma   params[0]:
+										{ SbdNdS->SetParameter(0, args[0]);
+											return SbdNdS->Integral(0, S_tSpline->Eval(args[0])); },
+											source->m_GammaBounds.first, source->m_GammaBounds.second, 0);
+		SbdNdS->SetParameter(1, 1.);  // b =1
+		Intensity.at(i) = GammaIntegrand->Integral(source->m_GammaBounds.first, source->m_GammaBounds.second);
+		SbdNdS->SetParameter(1, 2.);  // b =2
+		Autocorrelation.at(i) = GammaIntegrand->Integral(source->m_GammaBounds.first, source->m_GammaBounds.second);
+		
+		delete S_tSpline;
+		delete GammaIntegrand;
+	}
+	delete SbdNdS;
+	
+	std::cout << "Ebin\t Intensity\t Autocorrelation" << std::endl; 
+	for(unsigned int i = 0; i < EBins.size(); i++) std::cout << std::get<1>(EBins[i]) << '\t' << Intensity[i] << '\t' << Autocorrelation[i] << std::endl;
+	
+	std::vector<double> EBinMid; EBinMid.resize(EBins.size()); for(unsigned int i = 0; i < EBins.size(); i++) EBinMid[i] = std::get<1>(EBins[i]);
+	/// Now interpolate
+	auto IntensitySpline = std::make_shared<TSpline3>((std::string("Intensity function for ") + source->Name).c_str(),
+														(double*)EBinMid.data(), (double*)Intensity.data(), EBins.size());
+	auto AutocorrelationSpline = std::make_shared<TSpline3>((std::string("Autocorrelation function for ") + source->Name).c_str(),
+														(double*)EBinMid.data(), (double*)Autocorrelation.data(), EBins.size());													
+	source->Intensity = [IntensitySpline] (const double* args) { return IntensitySpline->Eval(args[0]); };
+	source->Autocorrelation = [AutocorrelationSpline] (const double* args) { return AutocorrelationSpline->Eval(args[0]); };
 }
 
 /// Calculates dN/dS and saves it in source->dNoverdS(double* args)  args[0]: S, args[1]: Gamma
@@ -94,15 +134,15 @@ void Benchmark::ObtaindNoverdS(AstrophysicalSource* source, const std::vector<do
 		{
 			IntegratedrohdVdzOverL->SetParameters(SGrid[i], GammaGrid[j]);
 			//dNdS.at(i + j*SGridSize) = IntegratedrohdVdzOverL->Integral(source->m_zBounds.first, source->m_zBounds.second)/(0.1*SGrid[i]);
-			gsl_spline2d_set (dNdSSpline.get(), dNdS, i, j, IntegratedrohdVdzOverL->Integral(source->m_zBounds.first, source->m_zBounds.second)/(0.1*SGrid[i]));
+			gsl_spline2d_set(dNdSSpline.get(), dNdS, i, j, IntegratedrohdVdzOverL->Integral(source->m_zBounds.first, source->m_zBounds.second)/(0.1*SGrid[i]));
 			// delta_S = 0.1*S
 		}
 	}
 	delete IntegratedrohdVdzOverL;
 	delete rohdVdz;
 	gsl_spline2d_init(dNdSSpline.get(), SGrid.data(), GammaGrid.data(), dNdS, SGridSize, GammaGridSize);
-	source->dNoverdS = [dNdSSpline, SAcc, GammaAcc_2] (const double *args) // args[0]: S   args[1]: Gamma
-														{ return gsl_spline2d_eval(dNdSSpline.get(), args[0], args[1], SAcc.get(), GammaAcc_2.get()); };
+	source->dNoverdS = [dNdSSpline, SAcc, GammaAcc_2] (const double S, const double Gamma, const double* other) // Save interpolated function in source
+														{ return gsl_spline2d_eval(dNdSSpline.get(), S, Gamma, SAcc.get(), GammaAcc_2.get()); };
 }
 
 /// Obtain mapping between flux S and Luminosity L for different redshifts and - if applicable - different photon indeces
@@ -254,7 +294,7 @@ std::vector<double> Benchmark::ObtainFluxThreshold(AstrophysicalSource* source, 
 		for(int j = 0; j < EBinsSize; j++)
 		{
 			S_t.at(i+j*GammaGridSize) = dNdE->Integral(std::get<0>(EBins[j]), std::get<2>(EBins[j])) * D->S_t_1GeV() / denominator;
-		}
+		}          // so that the values for a fixed EnergyBin are consecutive in memory
 		delete dNdESpline;
 		delete dNdE;
 	}

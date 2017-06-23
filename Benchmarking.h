@@ -23,6 +23,7 @@
 #include <ncurses.h>
 #include <memory>
 #include <limits>
+#include <algorithm>
 
 class Benchmark
 {
