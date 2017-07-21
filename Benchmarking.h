@@ -2,65 +2,78 @@
 #define BENCHMARKING_H
 
 #include <vector>
-#include <gsl/gsl_spline2d.h>
-#include <gsl/gsl_interp2d.h>
-#include <gsl/gsl_errno.h>
-#include <gsl/gsl_spline.h>
 #include <cassert> 
-#include "TROOT.h"
-#include "TF1.h"
-#include "TF2.h"
-#include "TSpline.h"
-#include "TCanvas.h"
-#include "TMath.h"
-#include "Math/IntegratorOptions.h"
-#include "Source.h"
-#include "AstrophysicalSource.h"
-#include "Constants.h"
-#include "CosmologyModel.h"
-#include "Detector.h"
 #include <ctime>
 #include <ncurses.h>
 #include <memory>
 #include <limits>
 #include <algorithm>
+#include <fstream>
+#include "TROOT.h"
+#include "TF1.h"
+#include "TF2.h"
+#include "TSpline.h"
+#include "TCanvas.h"
+#include "TFile.h"
+#include "TMath.h"
+#include "Math/IntegratorOptions.h"
+
+#include "Constants.h"
+#include "gsl2DInterpolationWrapper.h"
+#include "EBLAbsorbtionCoefficient.h"
+#include "CosmologyModel.h"
+#include "HaloModel.h"
+#include "Source.h"
+#include "AstrophysicalSource.h"
+#include "DarkMatter.h"
+#include "GalaxyCatalog.h"
+
+
+
+
 
 class Benchmark
 {
-private:
+protected:
 	bool m_log;
-	bool m_plot;
+	//bool m_plot;
 	std::shared_ptr<TCanvas> dIdzCanvas;
 	std::shared_ptr<TCanvas> dNdSCanvas;
-	Bounds LuminosityBounds;
+	Bounds LuminosityBounds_global;
+	Bounds zBounds_global;
 	
-	
-public:
-	std::vector<std::shared_ptr<AstrophysicalSource> > AstrophysicalSources;
 	std::shared_ptr<CosmologyModel> CM;
-	std::shared_ptr<Detector> D;
-	std::vector<Bin> EBins;
+	std::shared_ptr<HaloModel> HM;
+	std::vector<Bounds> EBins;
 	
-	Benchmark(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<Detector> _D, bool log, bool plot);
+public:	
+	
+	Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::vector<Bounds> EBins, Bounds LBounds, Bounds zBounds, bool log) ;
 	~Benchmark();
 	
-	void calculateIntensityAndAutocorrelation(int zGridLen, int GammaGridLen);
+	void calculateIntensityAndAutocorrelationForAstrophysicalSources(std::vector<std::shared_ptr<AstrophysicalSource> > sources, int zGridLen, int GammaGridLen, bool reusedNdS);
+	
+	void calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> > DM, unsigned int zGridLen);
 	
 private:
 	// For Astrophysical Sources
-	void calculateIntensityAndAutocorrelation(AstrophysicalSource* source,const  std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
-	void ObtainSoverLMapping(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl_spline2d>& SoverLSpline, std::shared_ptr<gsl_interp_accel>& zAcc, std::shared_ptr<gsl_interp_accel>& GammaAcc);
-	void ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl_spline2d>& SoverLSpline, std::shared_ptr<gsl_interp_accel>& zAcc, std::shared_ptr<gsl_interp_accel>& GammaAcc);
-	std::vector<double> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl_spline2d>& SoverLSpline, std::shared_ptr<gsl_interp_accel>& zAcc, std::shared_ptr<gsl_interp_accel>& GammaAcc);
+	void calculateIntensityAndAutocorrelation(AstrophysicalSource* source,const  std::vector<double>& zGrid, const std::vector<double>& GammaGrid, bool dNdSalreadyCalculated);
+	std::shared_ptr<gsl2DInterpolationWrapper> ObtainSoverLMapping(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
+	void ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
+	std::shared_ptr<gsl2DInterpolationWrapper> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline, const double S_t_1Gev);
+	
+	// For DM
+	void calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMatter>  DM, const std::vector<double>& zGrid, const std::vector<double>& kGrid);
+	
 };
-Benchmark::Benchmark(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<Detector> _D, bool log, bool plot )  : m_log(log), m_plot(plot),  CM(_CM), D(_D)
+Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::vector<Bounds> EBins, Bounds LBounds, Bounds zBounds, bool log = true)  
+																			: m_log(log)/*, m_plot(plot)*/,  LuminosityBounds_global(LBounds), zBounds_global(zBounds), CM(CM), HM(HM), EBins(EBins)
 {
-	LuminosityBounds.first = 1e1; LuminosityBounds.second = 1e15;
-	if(m_plot)
-	{
-		dIdzCanvas = std::make_shared<TCanvas>("dIdz", "dI/dz");
-		dNdSCanvas = std::make_shared<TCanvas>("dNdS", "dN/dS");
-	}
+	//if(m_plot)
+	//{
+	//	dIdzCanvas = std::make_shared<TCanvas>("dIdz", "dI/dz"); dIdzCanvas->Draw();
+	//	//dNdSCanvas = std::make_shared<TCanvas>("dNdS", "dN/dS");
+	//}
 }
 
 
