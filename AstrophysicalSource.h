@@ -15,7 +15,6 @@
 
 
 
-
 class AstrophysicalSource : public DGRBSource
 {
 	friend class Benchmark;
@@ -40,7 +39,7 @@ public:
 	virtual double EnergySpectrum(const double E, const double z, const double Gamma);					// dN/dE
 	virtual double RescaledLuminosityFunction(const double Luminosity, const double z, const double Gamma);
 	
-	
+	std::vector<std::pair<Bounds, std::shared_ptr<gsl1DInterpolationWrapper> > > APS;		// Contains pair of Energy bin and C_p(S_t_1) Spline
 };
 
 // Preimplemented functions that use the other implementations

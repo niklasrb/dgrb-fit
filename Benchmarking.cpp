@@ -71,21 +71,35 @@ void Benchmark::calculateIntensityAndAutocorrelation(AstrophysicalSource* source
 						SGrid.at(0), SGrid.at(SGrid.size()-1) , 2);  			// check range
 	
 	TF1* GammaIntegrand = new TF1((std::string("Integrated S^alpha * dN/dS for ") + source->Name).c_str(),
-										[source, SbdNdS, S_tSpline, &SGrid] (double* args, double* params) // args[0]: Gamma   params[0]: EBin
+										[source, SbdNdS, S_tSpline, &SGrid] (double* args, double* params) // args[0]: Gamma   params[0]: EBin params[1]: S_tSplineMultiplier
 										{	SbdNdS->SetParameter(0, args[0]);
 											//std::cout << "in Integrated S^alpha * dN/dS: Gamma: " << args[0] << "  S_t = " << S_tSpline->Eval(params[0], args[0]) << std::endl;
-											if(S_tSpline->Eval(params[0], args[0]) <= SGrid.at(0)) return 0.;
-											return SbdNdS->Integral(log(SGrid.at(0)), log(S_tSpline->Eval(params[0], args[0])), 1e-4); },
-											source->GammaBounds.first, source->GammaBounds.second, 1);
-		
+											if(params[1]*S_tSpline->Eval(params[0], args[0]) <= SGrid.at(0)) return 0.;
+											return SbdNdS->Integral(log(SGrid.at(0)), log(params[1]*S_tSpline->Eval(params[0], args[0])), 1e-4); },
+											source->GammaBounds.first, source->GammaBounds.second, 2);
+	//double** C_p = new double*[EBins.size()];
+	//for(unsigned int i = 0; i < EBins.size(); i++) C_p[i] = new double[S_t_1.size()];
+	
 	for(unsigned int i = 0; i < EBins.size(); i++)
 	{
+		
 		GammaIntegrand->SetParameter(0, std::get<1>(EBins.at(i)));
+		GammaIntegrand->SetParameter(1, 1.);		// Don't variate S_tSpline
 		SbdNdS->SetParameter(1, 1.);  // b =1
 		source->Intensity.push_back(std::pair<Bounds, double>(EBins.at(i), GammaIntegrand->Integral(source->GammaBounds.first, source->GammaBounds.second, 1e-4)));
-		//SbdNdS->SetParameter(1, 2.);  // b =2
-		//APS.at(i) = GammaIntegrand->Integral(source->GammaBounds.first, source->GammaBounds.second, 1e-4);
 		
+		SbdNdS->SetParameter(1, 2.);  // b =2
+		
+		double* C_p = new double[S_t_1.size()];
+		for(unsigned int j = 0; j < S_t_1.size(); j++)
+		{
+			GammaIntegrand->SetParameter(1, S_t_1.at(j)/S_t_1GeV);		// Variate S_tSpline to test dependence on flux threshold
+			C_p[j] = GammaIntegrand->Integral(source->GammaBounds.first, source->GammaBounds.second, 1e-4);
+		}
+		auto C_pSpline = std::make_shared<gsl1DInterpolationWrapper>(S_t_1.data(), S_t_1.size(), C_p); 
+		source->APS.push_back(std::make_pair(EBins.at(i), C_pSpline));
+		//APS.at(i) = GammaIntegrand->Integral(source->GammaBounds.first, source->GammaBounds.second, 1e-4);
+		delete C_p;
 		
 	}
 	delete GammaIntegrand;
@@ -93,7 +107,7 @@ void Benchmark::calculateIntensityAndAutocorrelation(AstrophysicalSource* source
 	delete SbdNdS;
 
 	
-	std::cout << "Ebin\t Intensity\t APS" << std::endl; 
+	//std::cout << "Ebin\t Intensity\t APS" << std::endl; 
 	//for(unsigned int i = 0; i < EBins.size(); i++) std::cout << std::get<1>(EBins[i]) << '\t' << Intensity[i] << '\t' << APS[i] << std::endl;
 	
 	//std::vector<double> EBinMid; EBinMid.resize(EBins.size()); for(unsigned int i = 0; i < EBins.size(); i++) EBinMid[i] = std::get<1>(EBins[i]);

@@ -63,8 +63,10 @@ int main(int argc, char** argv)
 	
 	for(unsigned int i = 0; i < AstrophysicalSources.size(); i++)
 	{
-		std::cout << AstrophysicalSources.at(i)->Name << ": " << std::endl;
+		std::cout << AstrophysicalSources.at(i)->Name << ": " << std::endl << "Intensity: ";
 		for(unsigned int j = 0; j < EBins.size(); j++) std::cout << AstrophysicalSources.at(i)->Intensity.at(j).second << '\t';
+		std::cout << std::endl << "C_p: " ;
+		for(unsigned int j = 0; j < EBins.size(); j++) std::cout << AstrophysicalSources.at(i)->APS.at(j).second->Eval(4.5e-10) << '\t';
 		std::cout << std::endl;
 	}
 	if(plot) 
