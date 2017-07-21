@@ -5,6 +5,7 @@
 #include "Constants.h"
 #include <cmath>
 #include <algorithm>
+#include <memory>
 
 class BLLAC : public AstrophysicalSource
 {
@@ -19,17 +20,17 @@ protected:
 	double alpha;
 	double p_1;
 	double p_2;
-	
-	BLLAC(std::shared_ptr<CosmologyModel> _CM, std::string name) : AstrophysicalSource(_CM, name)
+
+	BLLAC(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string name) : AstrophysicalSource(CM, tau, name)
 	{
-		m_zBounds.first = 1; m_zBounds.second = 6;
-		m_GammaBounds.first = 2.1 - 2*0.26;  m_GammaBounds.second = 2.1 + 2*0.26; // check
+		zBounds.first = 1e-4; zBounds.second = 6;
+		GammaBounds.first = 2.1 - 2*0.26;  GammaBounds.second = 2.1 + 2*0.26; // check
 	}
 	
 public:
-	BLLAC(std::shared_ptr<CosmologyModel> _CM) : BLLAC(_CM, std::string("BLLAC"))
+	BLLAC(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : BLLAC(CM, tau, std::string("BLLAC"))
 	{
-		E_cut = 1; // find out
+		E_cut = 40._GeV; // find out
 		A = 3.39e+4;
 		gamma_1 = 0.27;
 		L_s = 0.28e-3;
@@ -45,7 +46,7 @@ public:
 		return powf(1 + z, 2-Gamma) * exp(-E*z/E_cut);
 	}
 	
-	double EnergySpectrum(const double E, const double z, const double Gamma) override
+	double literal_F(const double E, const double z, const double Gamma) override
 	{
 		return powf(E/E_0, -Gamma) * exp(-E/E_cut);
 	}
@@ -57,16 +58,18 @@ public:
 	
 	double LuminosityFunction(const double Luminosity, const double z, const double Gamma) override
 	{
-		double z_c = z_c_s*powf(Luminosity,alpha);
-		double evo = 1/(powf((1+z)/(1+z_c),p_1)+powf((1+z)/(1+z_c),p_2));
-		double phi_bare = A/log(10)/Luminosity/(powf(Luminosity/L_s,gamma_1)+powf(Luminosity/L_s,gamma_2));
+		const double z_c = z_c_s*powf(Luminosity,alpha);
+		const double evo = 1/(powf((1+z)/(1+z_c),p_1)+powf((1+z)/(1+z_c),p_2));
+		const double phi_bare = A/log(10)/Luminosity/(powf(Luminosity/L_s,gamma_1)+powf(Luminosity/L_s,gamma_2));
+		//std::cout << z_c << '\t' << phi_bare << '\t' << evo << std::endl;
 		return phi_bare*evo;
 	}
 };
 
 class LISP : public BLLAC
 {
-	LISP(std::shared_ptr<CosmologyModel> _CM) : BLLAC(_CM, std::string("LISP"))
+public:
+	LISP(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : BLLAC(CM, tau, std::string("LISP"))
 	{
 		E_cut = 37._GeV;
 		A = 4.37e+4;
@@ -77,7 +80,8 @@ class LISP : public BLLAC
 		alpha = 0.36;
 		p_1 = 4.4;
 		p_2 = -2.9;
-		m_GammaBounds.first = 2.08 - 2*0.15;  m_GammaBounds.second = 2.08 + 2*0.15;
+		GammaBounds.first = 2.08 - 2*0.15;  GammaBounds.second = 2.08 + 2*0.15;
+		zBounds.first = 1e-4; zBounds.second = 3.;
 	}
 	
 	double GammaDistribution(const double Gamma) override
@@ -90,7 +94,8 @@ class LISP : public BLLAC
 	
 class HSP : public BLLAC
 {
-	HSP(std::shared_ptr<CosmologyModel> _CM) : BLLAC(_CM, std::string("HSP"))
+public:
+	HSP(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau ) : BLLAC(CM, tau, std::string("HSP"))
 	{
 		E_cut = 910._GeV;
 		A = 98e+4;
@@ -101,7 +106,7 @@ class HSP : public BLLAC
 		alpha = 0.25;
 		p_1 = -1.64;
 		p_2 = 4.8;
-		m_GammaBounds.first = 1.86 - 2*0.16;  m_GammaBounds.second = 1.86 + 2*0.16;
+		GammaBounds.first = 1.86 - 2*0.16;  GammaBounds.second = 1.86 + 2*0.16;
 	}
 	
 	double GammaDistribution(const double Gamma) override

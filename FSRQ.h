@@ -13,25 +13,25 @@ protected:
 	const double E_0 = 1._GeV;
 	
 public:
-	FSRQ(std::shared_ptr<CosmologyModel> _CM) : AstrophysicalSource(_CM, std::string("FSRQ"))
+	FSRQ(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : AstrophysicalSource(_CM, tau, std::string("FSRQ"))
 	{
-		m_zBounds.first = 1; m_zBounds.second = 6;
-		m_GammaBounds.first = 2.44 - 2*0.18; m_GammaBounds.second = 2.44 + 2*0.18;
+		zBounds.first = 1e-4; zBounds.second = 6;
+		GammaBounds.first = 2.44 - 2*0.18; GammaBounds.second = 2.44 + 2*0.18;
 	}
 	
 	double kCorrection(const double E, const double z, const double Gamma) override
 	{
-		return powf(1 + z, 2 - Gamma) * exp(-(sqrt(E*(1+z)) - E) / sqrt(E_cut));
+		return pow(1 + z, 2 - Gamma) * exp(-(sqrt(E*(1+z)) - E) / sqrt(E_cut));
 	}
 	
-	double EnergySpectrum(const double E, const double z, const double Gamma) override
+	double literal_F(const double E, const double z, const double Gamma) override
 	{
-		return powf(E/E_0, -Gamma) * exp(- sqrt(E/ E_cut));
+		return pow(E/E_0, -Gamma) * exp(- sqrt(E/ E_cut));
 	}
 	
 	double GammaDistribution(const double Gamma) override
 	{
-		return 1/sqrtf(2.*M_PI*0.18*0.18) * exp(-powf((Gamma - 2.44), 2)/(2.*0.18*0.18));
+		return 1/sqrt(2.*M_PI*0.18*0.18) * exp(-pow((Gamma - 2.44), 2)/(2.*0.18*0.18));
 	}			
 	
 	double LuminosityFunction(const double Luminosity, const double z, const double Gamma) override
@@ -46,9 +46,9 @@ public:
 		const double p_1 = 7.35;
 		const double p_2 = -6.51;
 		
-		double z_c = z_c_s*powf(Luminosity, alpha);
-		double evo = 1/(powf((1+z)/(1+z_c),p_1)+powf((1+z)/(1+z_c),p_2));
-		double phi_bare = A/log(10)/Luminosity/(powf(Luminosity/L_s,gamma_1)+powf(Luminosity/L_s,gamma_2));
+		double z_c = z_c_s*pow(Luminosity, alpha);
+		double evo = 1/(pow((1+z)/(1+z_c),p_1)+pow((1+z)/(1+z_c),p_2));
+		double phi_bare = A/log(10)/Luminosity/(pow(Luminosity/L_s,gamma_1)+pow(Luminosity/L_s,gamma_2));
 		return phi_bare*evo;
 	}
 	

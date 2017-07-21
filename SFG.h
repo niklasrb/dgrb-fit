@@ -23,10 +23,10 @@ protected:
 	double Phi_s_0;
 	
 public:
-	SFG(std::shared_ptr<CosmologyModel> _CM) : AstrophysicalSource(_CM, std::string("SFG"))
+	SFG(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : AstrophysicalSource(_CM, tau, std::string("SFG"))
 	{
-		m_zBounds.first = 1; m_zBounds.second = 6;
-		m_GammaBounds.first = 0; m_GammaBounds.second = 0;
+		zBounds.first = 1; zBounds.second = 6;
+		GammaBounds.first = 0; GammaBounds.second = 0;
 	}
 	
 	double kCorrection(const double E, const double z, const double Gamma) override
@@ -35,11 +35,11 @@ public:
 			return powf(1+z, 2-1.5);
 		if(E < 0.6_GeV  && 0.6_GeV < E*(1+z))
 			return powf(1+z, 2-gamma_X) * powf(E/0.6_GeV, 1.5 - gamma_X);
-		if(0.6_GeV <= E)
-			return powf(1+z, 2-gamma_X);
+		//if(0.6_GeV <= E)
+		return powf(1+z, 2-gamma_X);
 	}
 	
-	double EnergySpectrum(const double E, const double z, const double Gamma) override
+	double literal_F(const double E, const double z, const double Gamma) override
 	{
 		return powf(E/0.6_GeV, ( E < 0.6_GeV ? -1.5 : -gamma_X ));
 	}
