@@ -8,14 +8,15 @@
 class GalaxyCatalog
 {
 protected:
-	const double M_th = 1;
-	const double sigma_logM = 1;
-	const double M_cut = 1;
-	const double M_1 = 1;
-	const double alpha = 0;
-	const double beta = 1;
-	const double m = 0;
-	const double z_0 = 1;
+	double M_th = 1;
+	double sigma_logM = 1;
+	double M_cut = 1;
+	double M_1 = 1;
+	double alpha = 0;
+	double beta = 1;
+	double m = 0;
+	double z_0 = 1;
+	double S_t_1 = 0;
 	
 public:
 	std::string name = "";
@@ -27,8 +28,15 @@ public:
 	std::function<double(const double r, const double M, const double z)> SourceDensity = 0;
 	std::function<double(const double k, const double M, const double z)> SourceDensityFT = 0;
 	std::function<double(const double z)> EffectiveGalaxyDensity = 0;
-
-	static double DetectionEfficiency(const double S, const double S_t_1GeV);
+	
+	double S_t_1GeV() { return S_t_1; }
+	
+	double DetectionEfficiency(const double S)
+	{
+		return DetectionEfficiency(S, S_t_1);
+	}
+	
+	static double DetectionEfficiency(const double S, const double S_t_1Gev);
 };
 
 double GalaxyCatalog::WindowFunction(const double z)
