@@ -43,10 +43,11 @@ int main(int argc, char** argv)
 	
 	// Prepare Benchmark class
 	
-	Benchmark B(CM, HM, EBins, Bounds(1e-1, 1e15), Bounds(1e-3, 100), true);
+	Benchmark B(CM, HM, EBins, Bounds(1e-3, 1e15), Bounds(1e-3, 100), true);
 	//auto magn = std::make_shared<MAGN>(CM);
 	//std::cout << magn->RescaledLuminosityFunction(1e5, 1, 2.37) << std::endl;
 	std::vector<std::shared_ptr<AstrophysicalSource> > AstrophysicalSources;
+	std::vector<std::shared_ptr<DarkMatter> > dmModels;
 	
 	AstrophysicalSources.push_back(std::make_shared<MAGN>(CM, tau));
 	AstrophysicalSources.push_back(std::make_shared<FSRQ>(CM, tau));
@@ -54,6 +55,11 @@ int main(int argc, char** argv)
 	AstrophysicalSources.push_back(std::make_shared<HSP>(CM, tau));
 	//AstrophysicalSources.push_back(std::make_shared<SFG>(CM, tau));
 	B.calculateIntensityAndAutocorrelationForAstrophysicalSources(AstrophysicalSources, 30, 8, false);
+	
+	//dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, 1, 1));
+	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, 1, 1));
+	
+	//B.calculateIntensityAndAutocorrelationForDM(dmModels, 20);
 	
 	for(unsigned int i = 0; i < AstrophysicalSources.size(); i++)
 	{

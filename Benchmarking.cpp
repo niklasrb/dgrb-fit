@@ -116,30 +116,30 @@ void Benchmark::ObtaindNoverdS(AstrophysicalSource* source, const std::vector<do
 	Bounds zBounds_local; zBounds_local.first = std::max(source->zBounds.first, zBounds_global.first);
 	zBounds_local.second = std::min(source->zBounds.second, zBounds_global.second);
 	
-	const double deltaS_min = std::max(SGrid.at(0)*0.1, 1e-20); 	// since deltaS = 0.1*S  we have to troubleshoot for S=0
+	const double deltaS_min = std::max(SGrid.at(0)*0.1, 1e-70); 	// since deltaS = 0.1*S  we have to troubleshoot for S=0
 	
 	// Since the integral borders of the inner integral depend on the outer integral, we have to do it like this
 	
 	TF1* rohdVdz = new TF1((std::string("Integrand rho dV/dz for ") + source->Name).c_str(),   
-							[source, this] (double *args, double* params) // args[0]: Luminosity  params[0]:z   params[1]: Gamma   
+							[source, this] (double *args, double* params) // args[0]: log(L)  params[0]:z   params[1]: Gamma   
 							{ 	//std::cout << source->RescaledLuminosityFunction(args[0], params[0], params[1]) << '\t' << CM->ComovingVolume(params[0]) << std::endl;
-								if(isnan(source->RescaledLuminosityFunction(args[0], params[0], params[1]))) std::cout << "nan for L = " << args[0] << "  z = " << params[0] << "  Gamma = " << params[1] << std::endl;
-								return  source->RescaledLuminosityFunction(args[0], params[0], params[1])*CM->ComovingVolume(params[0]); },
-							LuminosityBounds_global.first, LuminosityBounds_global.second, 2);
+								//if(isnan(source->RescaledLuminosityFunction(args[0], params[0], params[1]))) std::cout << "nan for L = " << args[0] << "  z = " << params[0] << "  Gamma = " << params[1] << std::endl;
+								return  exp(args[0])*source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1])*CM->ComovingVolume(params[0]); },
+							log(LuminosityBounds_global.first), log(LuminosityBounds_global.second), 2);
 							
 	TF1* IntegratedrohdVdzOverL = new TF1((std::string("Integrated(rho dV/dz) over L for ") + source->Name).c_str(),   
 										[source, rohdVdz, SoverLSpline, deltaS_min] (double *args, double* params) // args[0]: log(z)  params[0]: S  params[1]: Gamma 
 										{ 	double SoverL = SoverLSpline->Eval(exp(args[0]), params[1]);
 											rohdVdz->SetParameters(exp(args[0])/*z*/, params[1]/*Gamma*/);
 											//std::cout << "S: " << params[0] <<"SOverL: " << SoverL << "   Int bounds: " << params[0] / SoverL << " - " << std::max(1.1*params[0], params[0] + deltaS_min)/ SoverL << std::endl;
-											return  exp(args[0])*rohdVdz->Integral(params[0] / SoverL , std::max(1.1*params[0], params[0] + deltaS_min)/ SoverL, 1e-4); }, // Integrate from L(S) to L(S+deltaS) 
+											return  exp(args[0])*rohdVdz->Integral(log(params[0] / SoverL) , log(std::max(1.1*params[0], params[0] + deltaS_min)/ SoverL), 1e-4); }, // Integrate from log(L(S)) to log(L(S+deltaS)) 
 										zBounds_local.first, zBounds_local.second, 2);
 	for(unsigned int i = 0; i < SGrid.size() ; i++)
 	{
 		for(unsigned int j = 0; j < GammaGrid.size(); j++)
 		{
 			IntegratedrohdVdzOverL->SetParameters(SGrid[i], GammaGrid[j]);
-			dNdS[i][j]  = IntegratedrohdVdzOverL->Integral(log(zBounds_local.first), log(zBounds_local.second), 1e-5)/(std::max(0.1*SGrid[i], deltaS_min), 1e-4);
+			dNdS[i][j]  = IntegratedrohdVdzOverL->Integral(log(zBounds_local.first), log(zBounds_local.second), 1e-4)/(std::max(0.1*SGrid[i], deltaS_min), 1e-4);
 			//std::cout << "(" << i << ", " << j << ", " << dNdS[i][j] <<")" << std::endl;
 			// delta_S = 0.1*S
 		}
