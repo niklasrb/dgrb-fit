@@ -7,6 +7,7 @@
 #include <fstream>
 #include <string>
 #include <cassert>
+#include <vector>
 
 #include "gsl2DInterpolationWrapper.h"
 #include "EBLAbsorbtionCoefficient.h"
@@ -37,13 +38,30 @@ std::shared_ptr<EBLAbsorbtionCoefficient> LoadEBLAbsorbtionCoefficient(std::fstr
 }
 
 
-std::shared_ptr<LinearMatterPowerSpectrum> LoadLinearMatterPowerSpectrum(std::string file)
+std::shared_ptr<LinearMatterPowerSpectrum> LoadLinearMatterPowerSpectrum(std::vector<std::fstream>& files)
 {
-	double x[] = {0};
-	double y[] = {0};
-	double** z = new double*; *z = new double; **z = 0;
-	gsl2DInterpolationWrapper spline(x, 1, y, 1, (const double**)z);
-	delete *z; delete z;
+	unsigned int kGridSize = 643;
+	unsigned int zGridSize = files.size();
+	
+	double* z = new double[zGridSize];
+	double* k = new double[kGridSize];
+	double** P = new double*[kGridSize]; for(unsigned int i = 0; i < kGridSize; i++) P[i] = new double[zGridSize]; 
+	
+	for(unsigned int j = 0; j < files.size(); j++)
+	{
+		files.at(j) >> z[j];
+		for(unsigned int i = 0; i < kGridSize; i++)
+		{
+			files.at(j) >> k[i];
+			files.at(j) >> P[i][j];
+		}
+	}
+	
+	gsl2DInterpolationWrapper spline(k, kGridSize, z, zGridSize, (const double**)P);
+	delete []z; delete []k;
+	for(unsigned int i = 0; i < kGridSize; i++) delete []P[i];
+	delete []P;
+	//spline.print();
 	return std::make_shared<LinearMatterPowerSpectrum>(spline);
 }
 
