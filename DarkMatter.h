@@ -1,6 +1,9 @@
 #ifndef DARKMATTER_H
 #define DARKMATTER_H
 
+/// This header contains the classes for different Dark Matter models
+/// They also inherit from 
+
 #include <string>
 #include <memory>
 #include <cmath>
