@@ -370,7 +370,7 @@ void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMa
 	//DM->Intensity = [IntensitySpline] (const double E) { return IntensitySpline->Eval(E); };
 	
 	/// Calculate 3D Power Spectrum and then APS
-	TF1* P1HaloIntegrand = new TF1((std::string("The Integrand dn/dm * sourcedensityFT^2 for the 1 Halo term for ") + DM->Name).c_str(),
+	/*TF1* P1HaloIntegrand = new TF1((std::string("The Integrand dn/dm * sourcedensityFT^2 for the 1 Halo term for ") + DM->Name).c_str(),
 									[DM, this] (double* args, double* params) // args[0]: M  params[0]: k  params[1]: z
 									{ return HM->HaloMassFunction(args[0], params[1]) * pow(DM->SourceDensityFT(params[0], args[0], params[1]), 2); },
 									HM->MBounds.first, HM->MBounds.second, 2);
@@ -400,8 +400,10 @@ void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMa
 	
 	//TF1* APSIntegrand = new TF1((std::string("Integrand WF^2 * P_ij / chi^2 for the APS of") + DM->Name).c_str(),
 	//							[DM, _3DPowerSpectrumSpline, this] (double* args, double *params) // args[0]:z  params[0]: E
-	//							{ return c_0/(pow(CM->ComovingDistance(args[0]), 2.) *CM->HubbleRate(z))  *pow(DM->WindowFunction(params[0], args[0]), 2.) * _3DPowerSpectrumSpline(/*k*/   , args[0]); },
+	//							{ return c_0/(pow(CM->ComovingDistance(args[0]), 2.) *CM->HubbleRate(z))  *pow(DM->WindowFunction(params[0], args[0]), 2.) * _3DPowerSpectrumSpline(/*k   , args[0]); },
 	//							zBounds_global.first, zBounds_global.second, 1);
+	
+	*/
 }
 
 #endif

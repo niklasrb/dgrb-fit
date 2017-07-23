@@ -123,7 +123,7 @@ void HaloModel::CalculateMatterFluctuationVariance()
 double HaloModel::f_ST(const double v)
 {
 	const double A = 0.322;  const double p = 0.3;  const double a = 0.707;
-	return A* sqrt(2*a*v/M_PI) * (1. + powf(a*v, -p)) * exp(-a*v/2);
+	return A* sqrt(2*a*v/M_PI) * (1. + pow(a*v, -p)) * exp(-a*v/2);
 }
 
 /// Calculates the linear Halo Bias b(m, z)
@@ -132,8 +132,8 @@ void HaloModel::CalculateLinearHaloBias()
 {
 	const double a = 0.707;  const double p = 0.3;
 	LinearHaloBias = [this, a, p] (const double m, const double z)
-					{ const double v = powf(CM->CriticalDensity, 2)/MatterFluctuationVariance(m, z); 
-						return 1+ (a*v - 1)/CM->CriticalDensity + 2*p/(CM->CriticalDensity * (1 + powf(a*v,p))); } ;
+					{ const double v = pow(CM->CriticalDensity, 2)/MatterFluctuationVariance(m, z); 
+						return 1+ (a*v - 1)/CM->CriticalDensity + 2*p/(CM->CriticalDensity * (1. + pow(a*v,p))); } ;
 }
 
 /// Calculates Halo Mass Function on a grid and then interpolates using gsl
@@ -154,7 +154,7 @@ void HaloModel::CalculateHaloMassFunction(const std::vector<double>& M, const st
 		
 		for(unsigned int j = 0; j < M.size(); j++) 
 		{
-			R = powf(3*M.at(j) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.);
+			R = pow(3*M.at(j) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.);
 			//std::cout << R << std::endl;
 			Sigma.at(j) =  sqrt(MatterFluctuationVariance(R, z.at(i))) ;  
 			logM.at(j) = log(M.at(j));
@@ -183,7 +183,7 @@ double HaloModel::ConcentrationParameter(const double M)
 {
 	const double c[] = { 37.5153, -1.5093, 1.636e-2 , 3.66e-4 , -2.89237e-5 , 5.32e-7 };
 	double sum = 0;
-	for(unsigned int i = 0; i < 6; i++) sum += c[i] * powf(log(M/M_solar), i);
+	for(unsigned int i = 0; i < 6; i++) sum += c[i] * pow(log(M/M_solar), i);
 	return sum;
 }
 
@@ -192,14 +192,14 @@ double HaloModel::SubhaloBoostFactor(const double M)
 {
 	const double c[] = { -0.442, 0.0796, -0.0025, 4.77e-6 , 4.77e-6 , -9.69e-8};
 	double sum = 0;
-	for(unsigned int i = 0; i < 6; i++) sum += c[i] * powf(log(M/M_solar), i);
+	for(unsigned int i = 0; i < 6; i++) sum += c[i] * pow(log(M/M_solar), i);
 	return exp(sum);
 }
 
 /// rho_DM
 double HaloModel::DMDensity(const double z)
 {
-	return CM->O_dm*CM->CriticalDensity*powf(1+z, 3);  // check
+	return CM->O_dm*CM->CriticalDensity*pow(1.+z, 3.);  // check
 }
 
 
@@ -207,15 +207,15 @@ double HaloModel::DMDensity(const double z)
 void HaloModel::CalculateNFWHaloDensityProfileFT()
 {
 	auto Integrand = std::make_shared<TF1>("Integrand sin(k*u*r_s)/(1+u^2)", [] (double* args, double *params) // args[0]: u  params[0]: k  params[1]: z  params[2]: r_s
-																					{ 	return sin(params[0]* args[0] * params[2]) / (1+args[0]*args[0]); },
+																					{ 	return sin(params[0]* args[0] * params[2]) / (1.+args[0]*args[0]); },
 																						0,/*range*/ 1e20, 3/*npar*/);			// check range
 																						
 	NFWHaloDensityProfileFT = [Integrand, this] (const double k, const double M, const double z)
 												{ const double c_vir = ConcentrationParameter(M);
-													const double r_vir = powf(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.);
+													const double r_vir = pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.);
 													const double r_s = c_vir/r_vir;
 													Integrand->SetParameters(k, z, r_s);
-													return (log(1+c_vir) - c_vir/(1+c_vir)) * Integrand->Integral(0, c_vir) /(k*r_s); };
+													return (log(1+c_vir) - c_vir/(1+c_vir)) * Integrand->Integral(0, c_vir, 1e-4) /(k*r_s); };
 }
 
 double HaloModel::NFWHaloDensityProfile(const double r, const double M, const double z)
@@ -233,14 +233,14 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT()
 	auto NFWIntegrand = std::make_shared<TF1>("NFW halo density ^2", 
 												[this] ( double* args, double* params) // args[0]: r  params[0]: M  params[1]: z
 												{
-													return 4*M_PI*powf(NFWHaloDensityProfile(args[0], params[0], params[1])/DMDensity(params[1]), 2);	},
+													return 4*M_PI*pow(NFWHaloDensityProfile(args[0], params[0], params[1])/DMDensity(params[1]), 2);	},
 													0,  1e99, 2);		// check range
 	
 	std::function<double(const double, const double, const double)> SourceDensityWithSubhaloBoost = 
 							[this, NFWIntegrand] (const double r, const double M, const double z) //args[0]: r params[0]: M  params[1]: z 
 							{	NFWIntegrand->SetParameters(M, z);
-								return powf(NFWHaloDensityProfile(r, M, z)/DMDensity(z), 2) + 
-												SubhaloBoostFactor(M)* NFWHaloDensityProfile(r, M, z)/M * NFWIntegrand->Integral(0, powf(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.), 1e-4); // Integrate to r_vir
+								return pow(NFWHaloDensityProfile(r, M, z)/DMDensity(z), 2) + 
+												SubhaloBoostFactor(M)* NFWHaloDensityProfile(r, M, z)/M * NFWIntegrand->Integral(0, pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.), 1e-4); // Integrate to r_vir
 							}; 
 	
 	// TODO: calculate this on a grid to avoid the thousand nested integrals
@@ -252,7 +252,7 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT()
 	
 	SourceDensitySubhaloBoostFT = [this, FTIntegrand] ( const double k, const double M, const double z)
 									{  FTIntegrand->SetParameters(k, M, z);
-										return 4*M_PI * FTIntegrand->Integral(0, powf(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.), 1e-4); };
+										return 4*M_PI * FTIntegrand->Integral(0, pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.), 1e-4); };
 }
 
 /// Calculates the clumping factor 
