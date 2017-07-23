@@ -65,6 +65,13 @@ std::shared_ptr<LinearMatterPowerSpectrum> LoadLinearMatterPowerSpectrum(std::ve
 	return std::make_shared<LinearMatterPowerSpectrum>(spline);
 }
 
-
+std::shared_ptr<gsl1DInterpolationWrapper> LoaddNdLogx(/*std::fstream& file*/)
+{
+	std::vector<double> dLogx = { -5., -4., -3., -2., -1., 0.};
+	std::vector<double> dN = {0, 0.3, 9, 11, 1.8, 0.};
+	auto NofLogx = std::make_shared<gsl1DInterpolationWrapper>(dLogx.data(), dLogx.size(), dN.data(), gsl_interp_linear, 0);
+	
+	return NofLogx;
+}
 
 #endif
