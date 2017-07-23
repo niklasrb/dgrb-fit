@@ -4,6 +4,9 @@
 #include "TFile.h"
 //#include "dgrbFit.h"
 
+// g++ -Wall -c "%f" -std=c++11 -I$ROOTSYS/include -g
+// g++ -Wall -o "%e" "%f" $(sh $ROOTSYS/bin/root-config --cflags --glibs) -lgsl -lgslcblas -lm -lncurses -ggdb 
+
 int main(int argc, char** argv)
 {
 	bool plot =true;
@@ -28,6 +31,9 @@ int main(int argc, char** argv)
 	auto Plin = LoadLinearMatterPowerSpectrum(PkFiles);
 	//Plin->print();
 	
+	// Load N of log(x) for DM
+	auto dNdLogx = LoaddNdLogx();
+	
 	// Prepare the Halo Model
 	auto HM = std::make_shared<HaloModel>(CM, Plin, Bounds(1e-6 * M_solar, 1e18 * M_solar), Bounds(1e-3, 6.));
 	HM->Init(60, 13);
@@ -49,26 +55,32 @@ int main(int argc, char** argv)
 	std::vector<std::shared_ptr<AstrophysicalSource> > AstrophysicalSources;
 	std::vector<std::shared_ptr<DarkMatter> > dmModels;
 	
+	/*
 	AstrophysicalSources.push_back(std::make_shared<MAGN>(CM, tau));
 	AstrophysicalSources.push_back(std::make_shared<FSRQ>(CM, tau));
 	AstrophysicalSources.push_back(std::make_shared<LISP>(CM, tau));
 	AstrophysicalSources.push_back(std::make_shared<HSP>(CM, tau));
 	//AstrophysicalSources.push_back(std::make_shared<SFG>(CM, tau));
-	B.calculateIntensityAndAutocorrelationForAstrophysicalSources(AstrophysicalSources, 30, 8, false);
+	B.calculateIntensityAndAutocorrelationForAstrophysicalSources(AstrophysicalSources, 30, 8, false); */
 	
-	//dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, 1, 1));
-	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, 1, 1));
+	dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, dNdLogx, 1e6, 1));
+	dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 2e6, 1));
 	
-	//B.calculateIntensityAndAutocorrelationForDM(dmModels, 20);
+	B.calculateIntensityAndAutocorrelationForDM(dmModels, 20);
 	
 	for(unsigned int i = 0; i < AstrophysicalSources.size(); i++)
 	{
-		std::cout << AstrophysicalSources.at(i)->Name << ": " << std::endl << "Intensity: ";
-		for(unsigned int j = 0; j < EBins.size(); j++) std::cout << AstrophysicalSources.at(i)->Intensity.at(j).second << '\t';
-		std::cout << std::endl << "C_p: " ;
-		for(unsigned int j = 0; j < EBins.size(); j++) std::cout << AstrophysicalSources.at(i)->APS.at(j).second->Eval(4.5e-10) << '\t';
+		AstrophysicalSources.at(i)->printResults(4e-10);
+	}
+	
+	for(unsigned int i = 0; i < dmModels.size(); i++)
+	{
+		std::cout << "DM Intensity: " ;
+		for(unsigned int j = 0; j < dmModels.at(i)->Intensity.size(); j++)
+			std::cout << "[" << dmModels.at(i)->Intensity.at(j).first.first << ", " << dmModels.at(i)->Intensity.at(j).first.second << "]: " << dmModels.at(i)->Intensity.at(j).second << '\t';
 		std::cout << std::endl;
 	}
+	
 	if(plot) 
 	{
 		//plotFile->Write();
