@@ -2,9 +2,11 @@
 #define COSMOLOGY_H
 
 #include "Constants.h"
-#include <cmath>
 #include "TROOT.h"
 #include "TF1.h"
+#include "gsl2DInterpolationWrapper.h"
+
+#include <cmath>
 #include <cmath>
 #include <memory>
 
@@ -34,19 +36,31 @@ private:
 											[this](double* args, double* params)  // args[0]: z
 											{ return 1./sqrt( O_r*powf(1+args[0], 4) + O_m*powf(1+args[0],3) + O_k*powf(1+args[0], 2) + O_l); },
 											0, 10, 0);
+	std::shared_ptr<gsl1DInterpolationWrapper> ComovingDistanceSpline;
+	
 	
 public:
 	
 	
-	LambdaCDM()
+	LambdaCDM(Bounds zBounds, unsigned int zGridLen)
 	{
 		O_m = 0.27;  			// matter density
-		CriticalDensity = 3*H_0*H_0/(8*M_PI*G);
+		CriticalDensity = 3.*H_0*H_0/(8.*M_PI*G)  *(3.0856776e22)/M_solar ;	// in  M_solar /  MPc^3
 		d_H = c_0/H_0; 		// Hubble distance		
 		O_r = 0.; 			// radiation density
 		O_l = 0.73;			// dark energy density
 		O_k = 0;			// curvature
 		O_dm = 0.23;
+		
+		std::vector<double> zGrid; zGrid.resize(zGridLen);
+		std::vector<double> CD; CD.resize(zGrid.size());
+		for(unsigned int i = 0; i < zGrid.size(); i++)
+		{
+			zGrid.at(i) = exp( log(zBounds.first) + i*(log(zBounds.second) - log(zBounds.first))/(zGridLen-1.));
+			CD.at(i) = d_H*EInverse->Integral(0, zGrid.at(i), 1e-4);
+		}
+		ComovingDistanceSpline = std::make_shared<gsl1DInterpolationWrapper>(zGrid.data(), zGrid.size(), CD.data(), gsl_interp_linear, 0);
+		ComovingDistanceSpline->print();
 	}
 	
 	double ComovingVolume(const double z) override
@@ -63,7 +77,7 @@ public:
 	
 	double ComovingDistance(const double z) override
 	{
-		return d_H*EInverse->Integral(0, z, 1e-3);
+		return ComovingDistanceSpline->Eval(z);
 	}
 	
 	double LuminosityDistance(const double z) override
