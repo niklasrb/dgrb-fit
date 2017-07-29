@@ -30,17 +30,17 @@
 
 
 
-
-
 class Benchmark
 {
 protected:
 	bool m_log;
 	//bool m_plot;
-	std::shared_ptr<TCanvas> dIdzCanvas;
-	std::shared_ptr<TCanvas> dNdSCanvas;
+	//std::shared_ptr<TCanvas> dIdzCanvas;
+	//std::shared_ptr<TCanvas> dNdSCanvas;
+	
 	Bounds LuminosityBounds_global;
 	Bounds zBounds_global;
+	Bounds kBounds_global;
 	
 	std::shared_ptr<CosmologyModel> CM;
 	std::shared_ptr<HaloModel> HM;
@@ -48,16 +48,16 @@ protected:
 	
 public:	
 	
-	Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::vector<Bounds> EBins, Bounds LBounds, Bounds zBounds, bool log) ;
+	Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::vector<Bounds> EBins, Bounds LBounds, Bounds zBounds, Bounds kBounds, bool log) ;
 	~Benchmark();
 	
-	void calculateIntensityAndAutocorrelationForAstrophysicalSources(std::vector<std::shared_ptr<AstrophysicalSource> > sources, int zGridLen, int GammaGridLen, bool reusedNdS);
+	void calculateIntensityAndAutocorrelationForAstrophysicalSources(std::vector<std::shared_ptr<AstrophysicalSource> > sources, int zGridLen, int GammaGridLen);
 	
-	void calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> > DM, unsigned int zGridLen);
+	void calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> > DM, unsigned int zGridLen, unsigned int kGridLen);
 	
 private:
 	// For Astrophysical Sources
-	void calculateIntensityAndAutocorrelation(AstrophysicalSource* source,const  std::vector<double>& zGrid, const std::vector<double>& GammaGrid, bool dNdSalreadyCalculated);
+	void calculateIntensityAndAutocorrelation(AstrophysicalSource* source,const  std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtainSoverLMapping(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
 	void ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline, const double S_t_1Gev);
@@ -66,8 +66,8 @@ private:
 	void calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMatter>  DM, const std::vector<double>& zGrid, const std::vector<double>& kGrid);
 	
 };
-Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::vector<Bounds> EBins, Bounds LBounds, Bounds zBounds, bool log = true)  
-																			: m_log(log)/*, m_plot(plot)*/,  LuminosityBounds_global(LBounds), zBounds_global(zBounds), CM(CM), HM(HM), EBins(EBins)
+Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::vector<Bounds> EBins, Bounds LBounds, Bounds zBounds, Bounds kBounds, bool log = true)  
+																			: m_log(log)/*, m_plot(plot)*/,  LuminosityBounds_global(LBounds), zBounds_global(zBounds), kBounds_global(kBounds), CM(CM), HM(HM), EBins(EBins)
 {
 	//if(m_plot)
 	//{
