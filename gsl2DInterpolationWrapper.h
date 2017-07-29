@@ -75,6 +75,7 @@ gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const double* _x, const uns
 		{
 			y[j] = _y[j];
 			gsl_interp2d_set(spline, z, i, j, _z[i][j]);
+			//z[i+n_x*j] = _z[i][j];
 		}
 	}
 	gsl_interp2d_init(spline, x, y, z, n_x, n_y);
