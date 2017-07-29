@@ -1,7 +1,7 @@
 #ifndef MULTINEST_H
 #define MULTINEST_H
 
-#include <string>
+//#include <string>
 #include <cstring>
 
 namespace nestrun
