@@ -22,7 +22,7 @@
 #include "LinearMatterPowerSpectrum.h"
 
 
-/// This class provides the halo mass function & other important functions which are needed to calculate the 3D Power Spectrum
+/// This class provides the halo mass function & other important functions which are needed for the Halo Model
 class HaloModel
 {
 	friend class Benchmark;
@@ -45,7 +45,7 @@ protected:
 	
 	// These routines calculate the std::functions defined below
 	void CalculateMatterFluctuationVariance(const std::vector<double>& R, const std::vector<double>& z);			
-	void CalculateLinearHaloBias();
+	void CalculateLinearHaloBias(std::vector<double>& M, std::vector<double>& z);
 	void CalculateHaloMassFunction(const std::vector<double>& M, const std::vector<double>& z);
 	void CalculateNFWHaloDensityProfileFT(const std::vector<double>& kr_Grid, const std::vector<double>& cGrid);
 	void CalculateSourceDensitySubhaloBoostFT();
@@ -100,16 +100,12 @@ void HaloModel::Init(unsigned int MLen, unsigned int zLen, unsigned int kLen)
 	std::vector<double> R; R.resize(M.size()/*z.size()*/);
 	for(unsigned int i= 0; i < M.size(); i++)
 	{
-		//for(unsigned int j = 0; j < z.size(); j++)
-		//{
-			R.at(i) = pow(3*M.at(i) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.);
-		//}
+		R.at(i) = pow(3*M.at(i) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.);
 	}
-	//std::sort(R.begin(), R.end()); 	// check necessity
-		
+	//std::cout << "R[0] = " << R[0] << "   R[" << R.size()-1 << "] = " << R[R.size() - 1] << std::endl;
 	
 	CalculateMatterFluctuationVariance(R, z);
-	CalculateLinearHaloBias();
+	CalculateLinearHaloBias(M, z);
 	CalculateHaloMassFunction(M, z);
 	CalculateNFWHaloDensityProfileFT(k, c);
 	//CalculateSourceDensitySubhaloBoostFT();
@@ -149,7 +145,8 @@ void HaloModel::CalculateMatterFluctuationVariance(const std::vector<double>& R,
 	std::cout << "MFV: "; MFVSpline->print();
 	
 	MatterFluctuationVariance = [MFVSpline] (const double R, const double z)   // more redshift evolution ?
-												{ return MFVSpline->Eval(R, z); } ; 
+												{ if(MFVSpline->Eval(R, z) <= 0) std::cout << "MFV: R = " << R << "  z = " << z << " MFV = " << MFVSpline->Eval(R, z) << std::endl;
+													return MFVSpline->Eval(R, z); } ; 
 }
 
 /// Part of the Sheth et al Halo Mass Function fit
@@ -161,13 +158,33 @@ double HaloModel::f_ST(const double v)
 
 /// Calculates the linear Halo Bias b(m, z)
 /// Needs the Matter fluctuation variance
-void HaloModel::CalculateLinearHaloBias()
+void HaloModel::CalculateLinearHaloBias(std::vector<double>& M, std::vector<double>& z)
 {
-	const double a = 0.707;  const double p = 0.3;
-	LinearHaloBias = [this, a, p] (const double m, const double z)
+	const double a = 0.707;  const double p = 0.3; double v;
+	
+	double** LHB = new double*[M.size()];
+	for(unsigned int i = 0; i < M.size(); i++) LHB[i] = new double[z.size()];
+	
+	for(unsigned int i = 0; i < M.size(); i++)
+	{
+		for(unsigned int j = 0; j < z.size(); j++)
+		{
+			v = pow(CriticalOverdensity, 2)/MatterFluctuationVariance(pow(3*M.at(i) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.), z.at(j));
+			LHB[i][j] = 1. + (a*v - 1.)/CriticalOverdensity + 2.*p/(CriticalOverdensity * (1. + pow(a*v,p)));
+		}
+	}
+	
+	auto LHBSpline = std::make_shared<gsl2DInterpolationWrapper>(M.data(), M.size(), z.data(), z.size(), (const double**) LHB);
+	std::cout << "LHB = "; LHBSpline->print();
+	LinearHaloBias = [LHBSpline] (const double M, const double z)
+						{  return LHBSpline->Eval(M, z);  };
+					
+	for(unsigned int i = 0; i < M.size(); i++) delete [] LHB[i];
+	delete []LHB;
+	/*LinearHaloBias = [this, a, p] (const double m, const double z)
 					{ const double v = pow(CriticalOverdensity, 2)/MatterFluctuationVariance(pow(3*m / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.), z); 
-						std::cout << "LHB: " << m << '\t' << z << '\t' << CriticalOverdensity << '\t' << MatterFluctuationVariance(m, z) << '\t' << v << std::endl;
-						return 1. + (a*v - 1.)/CriticalOverdensity + 2.*p/(CriticalOverdensity * (1. + pow(a*v,p))); } ;
+						//std::cout << "LHB: " << pow(3*m / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.) << '\t' << MatterFluctuationVariance(pow(3*m / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.), z) << '\t' << v << std::endl;
+						return 1. + (a*v - 1.)/CriticalOverdensity + 2.*p/(CriticalOverdensity * (1. + pow(a*v,p))); } ;*/
 }
 
 /// Calculates Halo Mass Function on a grid and then interpolates using gsl
@@ -189,18 +206,17 @@ void HaloModel::CalculateHaloMassFunction(const std::vector<double>& M, const st
 		for(unsigned int j = 0; j < M.size(); j++) 
 		{
 			R = pow(3*M.at(j) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.);
-			
 			Sigma.at(j) =  sqrt(MatterFluctuationVariance(R, z.at(i))) ;  
 			logM.at(j) = log(M.at(j));
 			logSigma.at(j) = log(Sigma.at(j));
-			std::cout << "R = " << R << "  sigma= " << Sigma.at(j) << std::endl;
+			//std::cout << "R = " << R << "  sigma= " << Sigma.at(j) << std::endl;
 		}
 		
-		LogSigmaSpline = new gsl1DInterpolationWrapper((double*) logM.data(), M.size(), (double*) logSigma.data());
+		LogSigmaSpline = new gsl1DInterpolationWrapper((double*) logM.data(), logM.size(), (double*) logSigma.data());
 		for(unsigned int j = 0; j < M.size(); j++) 
 		{
 			//std::cout << pow(CriticalOverdensity/Sigma.at(j), 2.) << '\t' << f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) << '\t' << std::abs(LogSigmaSpline->Derivative(log(M.at(j)))) << std::endl;
-			HMF[j][i] = CM->CriticalDensity*CM->O_m/M.at(j) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogSigmaSpline->Derivative(log(M.at(j))));
+			HMF[j][i] = CM->CriticalDensity*CM->O_m/M.at(j) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogSigmaSpline->Derivative(logM.at(j)));
 		}
 		
 		delete LogSigmaSpline;
@@ -262,7 +278,7 @@ void HaloModel::CalculateNFWHaloDensityProfileFT(const std::vector<double>& kr_G
 		}
 	}
 	auto FTIntSpline = std::make_shared<gsl2DInterpolationWrapper>(kr_Grid.data(), kr_Grid.size(), cGrid.data(), cGrid.size(), (const double**)FTInt);
-	std::cout << "FTIntSpline: "; FTIntSpline->print();
+	//std::cout << "FTIntSpline: "; FTIntSpline->print();
 																						
 	NFWHaloDensityProfileFT = [FTIntSpline, this] (const double k, const double M, const double z)
 												{ const double c_vir = ConcentrationParameter(M)/(1.+z);
@@ -291,7 +307,7 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT()
 													0,  1e99, 2);		// check range
 	
 	std::function<double(const double, const double, const double)> SourceDensityWithSubhaloBoost = 
-							[this, NFWIntegrand] (const double r, const double M, const double z) //args[0]: r params[0]: M  params[1]: z 
+							[this, NFWIntegrand] (const double r, const double M, const double z)  
 							{	NFWIntegrand->SetParameters(M, z);
 								return pow(NFWHaloDensityProfile(r, M, z)/DMDensity(z), 2) + 
 												SubhaloBoostFactor(M)* NFWHaloDensityProfile(r, M, z)/M * NFWIntegrand->Integral(0, pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.), 1e-4); // Integrate to r_vir
