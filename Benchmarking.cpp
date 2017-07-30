@@ -360,19 +360,21 @@ void Benchmark::calculateIntensityAndAutocorrelationForDM(std::vector<std::share
 	assert(zGridLen >=1);
 	std::vector<double> zGrid; zGrid.resize(zGridLen);
 	std::vector<double> kGrid; kGrid.resize(kGridLen);
+	std::vector<int> Multipoles; Multipoles.resize(5);
 	
-	for(unsigned int i = 0; i < zGridLen; i++) zGrid.at(i) = exp(log(zBounds_global.first) + double(i)* (log(zBounds_global.second) - log(zBounds_global.first))/zGridLen);
-	for(unsigned int i = 0; i < kGridLen; i++) kGrid.at(i) = exp(log(kBounds_global.first) + double(i)* (log(kBounds_global.second) - log(kBounds_global.first))/kGridLen);
+	for(unsigned int i = 0; i < zGridLen; i++) zGrid.at(i) = exp(log(zBounds_global.first) + double(i)* (log(zBounds_global.second) - log(zBounds_global.first))/(zGridLen-1.));
+	for(unsigned int i = 0; i < kGridLen; i++) kGrid.at(i) = exp(log(kBounds_global.first) + double(i)* (log(kBounds_global.second) - log(kBounds_global.first))/(kGridLen-1.));
+	for(unsigned int i = 0; i < Multipoles.size(); i++) Multipoles.at(i) = i;
 	
-	std::cout << zGrid[0] << zGrid[1] << std::endl;
+	std::cout << zGrid[0] << zGrid[zGridLen-1] << std::endl;
 	
 	for(unsigned int i = 0; i < DM.size(); i++)
 	{
-		calculateIntensityAndAutocorrelationForDM(DM.at(i), zGrid, kGrid);
+		calculateIntensityAndAutocorrelationForDM(DM.at(i), zGrid, kGrid, Multipoles);
 	}
 }
 
-void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMatter> DM, const std::vector<double>& zGrid, const std::vector<double>& kGrid)
+void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMatter> DM, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<int>& Multipoles)
 {
 	/// Calculate Intensity by integrating window function
 	TF2* wf = new TF2((std::string("Window function for") + DM->Name).c_str(),
@@ -396,7 +398,7 @@ void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMa
 	
 	TF1* P2HaloIntegrand = new TF1((std::string("The Integrand dn/dm * LinearHaloBias *sourcedensityFT for the 2 Halo term for ") + DM->Name).c_str(),
 									[DM, this] (double* args, double* params) // args[0]: log(M)  params[0]: k  params[1]: z
-									{ std::cout << "P1: " << exp(args[0]) << '\t' << params[0] << '\t' << HM->HaloMassFunction(exp(args[0]), params[1]) << '\t' << HM->LinearHaloBias(exp(args[0]), params[1]) << '\t' << DM->SourceDensityFT(params[0], exp(args[0]), params[1]) << std::endl;
+									{ //std::cout << "P2: " << exp(args[0]) << '\t' << params[0] << '\t' << HM->HaloMassFunction(exp(args[0]), params[1]) << '\t' << HM->LinearHaloBias(exp(args[0]), params[1]) << '\t' << DM->SourceDensityFT(params[0], exp(args[0]), params[1]) << std::endl;
 										return exp(args[0])*HM->HaloMassFunction(exp(args[0]), params[1]) * HM->LinearHaloBias(exp(args[0]), params[1]) * DM->SourceDensityFT(params[0], exp(args[0]), params[1]); },
 									log(HM->MBounds.first), log(HM->MBounds.second), 2);
 	
@@ -410,24 +412,58 @@ void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMa
 			_3DPowerSpectrum[i][j] = P1HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-4)   
 										+ pow(P2HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-4), 2)*(*(HM->Plin))(kGrid.at(i), zGrid.at(j));
 			
-			std::cout << '(' << i << ", " << j << "): " << _3DPowerSpectrum[i][j] << std::endl;
+			//std::cout << '(' << i << ", " << j << "): " << _3DPowerSpectrum[i][j] << std::endl;
 		}
 	} 
 	delete P1HaloIntegrand; delete P2HaloIntegrand;
 	
-	gsl2DInterpolationWrapper _3DPowerSpectrumSpline(kGrid.data(), kGrid.size(), zGrid.data(), zGrid.size(),(const double**) _3DPowerSpectrum);
+	auto _3DPowerSpectrumSpline = std::make_shared<gsl2DInterpolationWrapper>(kGrid.data(), kGrid.size(), zGrid.data(), zGrid.size(),(const double**) _3DPowerSpectrum);
 	
-	//for(unsigned int i = 0; i < kGrid.size(); i++) delete[] _3DPowerSpectrum[i];
-	//delete []_3DPowerSpectrum; 
-	_3DPowerSpectrumSpline.print();
-	
-	
-	//TF1* APSIntegrand = new TF1((std::string("Integrand WF^2 * P_ij / chi^2 for the APS of") + DM->Name).c_str(),
-	//							[DM, _3DPowerSpectrumSpline, this] (double* args, double *params) // args[0]:z  params[0]: E
-	//							{ return c_0/(pow(CM->ComovingDistance(args[0]), 2.) *CM->HubbleRate(z))  *pow(DM->WindowFunction(params[0], args[0]), 2.) * _3DPowerSpectrumSpline(k   , args[0]); },
-	//							zBounds_global.first, zBounds_global.second, 1);
+	for(unsigned int i = 0; i < kGrid.size(); i++) delete[] _3DPowerSpectrum[i];
+	delete []_3DPowerSpectrum; 
+	_3DPowerSpectrumSpline->print();
 	
 	
+	TF3* APSCrossIntegrand = new TF3((std::string("Integrand WF*WF * P_ij / chi^2 for the APS of") + DM->Name).c_str(),
+								[DM, _3DPowerSpectrumSpline, this] (double* args, double *params) // args[0]:log(z) args[1]:E1  args[2]:E2   params[0]: multipole
+								{ 	double chi = CM->ComovingDistance(exp(args[0]));
+									return exp(args[0])*c_0/(pow(chi, 2.)*CM->HubbleRate(exp(args[0])))*DM->WindowFunction(args[1], exp(args[0]))*DM->WindowFunction(args[2], exp(args[0])) * _3DPowerSpectrumSpline->Eval(params[1]/chi, exp(args[0])); },
+								log(zBounds_global.first), log(zBounds_global.second), EBins[0].first, EBins[EBins.size()-1].second, EBins[0].first, EBins[EBins.size()-1].second, 1);
+	
+	auto APS = std::make_shared<AngularPowerSpectrum<double> >(EBins.size(), EBins.size(), Multipoles.size());
+	
+	for(unsigned int i = 0; i < EBins.size(); i++)
+	{
+		for(unsigned int j = 0; j < EBins.size(); j++)
+		{
+			if(i != j)
+			{
+				for(unsigned int k = 0; k < Multipoles.size(); k++)
+				{
+					APSCrossIntegrand->SetParameter(0, Multipoles.at(k));
+					(*APS)(i, j, k) = APSCrossIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second,
+																EBins[j].first, EBins[j].second, 1e-4);
+					std::cout << "( " << i << ", " << j << ", " << k << "): " << (*APS)(i,j,k) << std::endl;
+				}
+			}
+		}
+	}
+	delete APSCrossIntegrand;
+	TF2* APSAutoIntegrand = new TF2((std::string("Integrand WF^2 * P_ij / chi^2 for the APS of") + DM->Name).c_str(),
+								[DM, _3DPowerSpectrumSpline, this] (double* args, double *params) // args[0]:log(z) args[1]:E   params[0]: multipole
+								{ 	double chi = CM->ComovingDistance(exp(args[0]));
+									return exp(args[0])*c_0/(pow(chi, 2.)*CM->HubbleRate(exp(args[0])))*pow(DM->WindowFunction(args[1], exp(args[0])), 2)* _3DPowerSpectrumSpline->Eval(params[1]/chi, exp(args[0])); },
+								log(zBounds_global.first), log(zBounds_global.second), EBins[0].first, EBins[EBins.size()-1].second, 1);
+	for(unsigned int i = 0; i < EBins.size(); i++)
+	{
+		for(unsigned int k = 0; k < Multipoles.size(); k++)
+		{
+			APSAutoIntegrand->SetParameter(0, Multipoles.at(k));
+			(*APS)(i, i, k) = APSAutoIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second, 1e-4);
+			std::cout << "( " << i << ", " << k << "): " << (*APS)(i,i,k) << std::endl;
+		}
+	}
+	DM->APS = APS;
 }
 
 #endif

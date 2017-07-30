@@ -12,6 +12,7 @@
 #include "TROOT.h"
 #include "TF1.h"
 #include "TF2.h"
+#include "TF3.h"
 #include "TSpline.h"
 #include "TCanvas.h"
 #include "TFile.h"
@@ -27,7 +28,7 @@
 #include "AstrophysicalSource.h"
 #include "DarkMatter.h"
 #include "GalaxyCatalog.h"
-
+#include "AngularPowerSpectrum.h"
 
 
 class Benchmark
@@ -63,7 +64,7 @@ private:
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline, const double S_t_1Gev);
 	
 	// For DM
-	void calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMatter>  DM, const std::vector<double>& zGrid, const std::vector<double>& kGrid);
+	void calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMatter> DM, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<int>& Multipoles);
 	
 };
 Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::vector<Bounds> EBins, Bounds LBounds, Bounds zBounds, Bounds kBounds, bool log = true)  
