@@ -12,6 +12,7 @@
 #include "Constants.h"
 #include "Source.h"
 #include "HaloModel.h"
+#include "AngularPowerSpectrum.h"
 
 
 class DarkMatter : public DGRBSource
@@ -23,7 +24,7 @@ public:
 	std::shared_ptr<HaloModel> HM;
 	const double Mass;
 	
-	std::vector<std::vector<double> > APS;
+	std::shared_ptr<AngularPowerSpectrum<double> > APS;
 	
 	std::function<double(const double E, const double z)> EnergySpectrum = 0;  // dN/dE
 	
