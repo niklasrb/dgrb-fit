@@ -4,7 +4,7 @@
 #include "Constants.h"
 #include "TROOT.h"
 #include "TF1.h"
-#include "gsl2DInterpolationWrapper.h"
+#include "InterpolationWrapper.h"
 
 #include <cmath>
 #include <cmath>
