@@ -65,8 +65,31 @@ public:
 		delete []data;
 	}
 	
-	AngularPowerSpectrum(const AngularPowerSpectrum& aps) = delete;				// forbid copying for now
-	AngularPowerSpectrum operator =(const AngularPowerSpectrum& aps) = delete;
+	AngularPowerSpectrum(const AngularPowerSpectrum& aps) : nBin1(aps.nBin1), nBin2(nBin2), nMul(nMul)
+	{
+		data = new T**[nBin1];
+		for(unsigned int i = 0; i < nBin1; i++)
+		{
+			data[i] = new T*[nBin2];
+			for(unsigned int j = 0; j < nBin2; j++)
+			{
+				data[i][j] = new T[nMul];
+				for(unsigned int k = 0; k < nMul; k++)
+				{
+					data[i][j][k] = aps.data[i][j][k];
+				}
+			}
+		}
+	}
+	
+	AngularPowerSpectrum& operator =(const AngularPowerSpectrum& aps)
+	{
+		if(this == &aps) return *this;
+		AngularPowerSpectrum<T> tmp(aps);
+		std::swap(nBin1, tmp.nBin1); std::swap(nBin2, tmp.nBin2);
+		std::swap(nMul, tmp.nMul); std::swap(data, tmp.data);
+		return *this;
+	}
 	
 	
 };
@@ -76,8 +99,15 @@ public:
 template<typename T> 
 class AstrophysicalSourceAPS :	public AngularPowerSpectrum<T>
 {
+public:
 	AstrophysicalSourceAPS(std::vector<Bounds>& EBins) : AngularPowerSpectrum<T>::AngularPowerSpectrum(EBins.size(), EBins.size(), 1)	{	}
 	
+	
+	T& operator ()(unsigned int EBin1, unsigned int EBin2)
+	{
+		assert(EBin1 < this->nBin1  && EBin2 < this->nBin2);
+		return this->data[EBin1][EBin2][0];
+	}
 	
 	T& operator ()(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole) override
 	{
