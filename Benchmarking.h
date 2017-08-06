@@ -20,7 +20,7 @@
 #include "Math/IntegratorOptions.h"
 
 #include "Constants.h"
-#include "gsl2DInterpolationWrapper.h"
+#include "InterpolationWrapper.h"
 #include "EBLAbsorbtionCoefficient.h"
 #include "CosmologyModel.h"
 #include "HaloModel.h"

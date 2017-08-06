@@ -80,6 +80,8 @@ void Benchmark::calculateIntensityAndAutocorrelation(AstrophysicalSource* source
 	//double** C_p = new double*[EBins.size()];
 	//for(unsigned int i = 0; i < EBins.size(); i++) C_p[i] = new double[S_t_1.size()];
 	
+	source->APS = std::make_shared<AstrophysicalSourceAPS<std::shared_ptr<gsl1DInterpolationWrapper> > >(EBins);
+	
 	for(unsigned int i = 0; i < EBins.size(); i++)
 	{
 		
@@ -113,7 +115,7 @@ void Benchmark::calculateIntensityAndAutocorrelation(AstrophysicalSource* source
 			}
 		}
 		auto C_pSpline = std::make_shared<gsl1DInterpolationWrapper>(S_t_1.data(), S_t_1.size(), C_p); 
-		source->APS.push_back(std::make_pair(EBins.at(i), C_pSpline));
+		(*(source->APS))(i, i) = C_pSpline;
 		//APS.at(i) = GammaIntegrand->Integral(source->GammaBounds.first, source->GammaBounds.second, 1e-4);
 		delete C_p;
 		
@@ -443,7 +445,7 @@ void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMa
 					APSCrossIntegrand->SetParameter(0, Multipoles.at(k));
 					(*APS)(i, j, k) = APSCrossIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second,
 																EBins[j].first, EBins[j].second, 1e-4);
-					std::cout << "( " << i << ", " << j << ", " << k << "): " << (*APS)(i,j,k) << std::endl;
+					//std::cout << "( " << i << ", " << j << ", " << k << "): " << (*APS)(i,j,k) << std::endl;
 				}
 			}
 		}
@@ -460,7 +462,7 @@ void Benchmark::calculateIntensityAndAutocorrelationForDM(std::shared_ptr<DarkMa
 		{
 			APSAutoIntegrand->SetParameter(0, Multipoles.at(k));
 			(*APS)(i, i, k) = APSAutoIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second, 1e-4);
-			std::cout << "( " << i << ", " << k << "): " << (*APS)(i,i,k) << std::endl;
+			//std::cout << "( " << i << ", " << k << "): " << (*APS)(i,i,k) << std::endl;
 		}
 	}
 	DM->APS = APS;
