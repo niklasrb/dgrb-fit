@@ -9,9 +9,11 @@
 #include <functional>
 #include <utility>
 #include <memory>
+
 #include "Constants.h"
 #include "CosmologyModel.h"
 #include "EBLAbsorbtionCoefficient.h"
+#include "AngularPowerSpectrum.h"
 
 class DGRBSource
 {
