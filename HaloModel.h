@@ -17,7 +17,7 @@
 #include "TF1.h"
 #include "TSpline.h"
 #include "Constants.h"
-#include "gsl2DInterpolationWrapper.h"
+#include "InterpolationWrapper.h"
 #include "CosmologyModel.h"
 #include "LinearMatterPowerSpectrum.h"
 
@@ -48,7 +48,7 @@ protected:
 	void CalculateLinearHaloBias(std::vector<double>& M, std::vector<double>& z);
 	void CalculateHaloMassFunction(const std::vector<double>& M, const std::vector<double>& z);
 	void CalculateNFWHaloDensityProfileFT(const std::vector<double>& kr_Grid, const std::vector<double>& cGrid);
-	void CalculateSourceDensitySubhaloBoostFT();
+	void CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std::vector<double>& k, std::vector<double>& z);
 	void CalculateClumpingFactor(const std::vector<double>& z);
 	//void Calculate3DPowerSpectrum();
 	
@@ -108,8 +108,8 @@ void HaloModel::Init(unsigned int MLen, unsigned int zLen, unsigned int kLen)
 	CalculateLinearHaloBias(M, z);
 	CalculateHaloMassFunction(M, z);
 	CalculateNFWHaloDensityProfileFT(k, c);
-	//CalculateSourceDensitySubhaloBoostFT();
-	//CalculateClumpingFactor(z);
+	CalculateSourceDensitySubhaloBoostFT(M, k, z);
+	CalculateClumpingFactor(z);
 }
 
 /// Top Hat Window function, commonly W
@@ -237,17 +237,17 @@ double HaloModel::ConcentrationParameter(const double M)
 {
 	const double c[] = { 37.5153, -1.5093, 1.636e-2 , 3.66e-4 , -2.89237e-5 , 5.32e-7 };
 	double sum = 0;
-	for(unsigned int i = 0; i < 6; i++) sum += c[i] * pow(log(M), i);
+	for(unsigned int i = 0; i < 6; i++) sum += c[i] * pow(log(M*h), i);
 	return sum;
 }
 
 /// Calculates the subhalo boost factor b_sub for a given mass in M_solar
 double HaloModel::SubhaloBoostFactor(const double M)
 {
-	const double c[] = { -0.442, 0.0796, -0.0025, 4.77e-6 , 4.77e-6 , -9.69e-8};
+	const double b[] = { -0.442, 0.0796, -0.0025, 4.77e-6 , 4.77e-6 , -9.69e-8};
 	double sum = 0;
-	for(unsigned int i = 0; i < 6; i++) sum += c[i] * pow(log(M), i);
-	return exp(sum);
+	for(unsigned int i = 0; i < 6; i++) sum += b[i] * pow(log(M), i);
+	return exp(sum*log(10.));
 }
 
 /// Dark Matter density for a givev redshift
@@ -298,31 +298,60 @@ double HaloModel::NFWHaloDensityProfile(const double r, const double M, const do
 }
 
 ///Calculates the Fourier transform of the Source Density with a subhalo boost
-void HaloModel::CalculateSourceDensitySubhaloBoostFT()
+void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std::vector<double>& k, std::vector<double>& z)
 {
+	// we need a different r grid
+	std::vector<double> r; r.resize(2*M.size());
+	for(unsigned int i = 0; i < M.size(); i++)
+	{
+		r.at(2*i) = pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.);
+		r.at(2*i+1) = pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(z.size()-1))), 1./3.);
+	}
+	std::sort(r.begin(), r.end());
+	
 	auto NFWIntegrand = std::make_shared<TF1>("NFW halo density ^2", 
 												[this] ( double* args, double* params) // args[0]: r  params[0]: M  params[1]: z
-												{
-													return 4*M_PI*pow(NFWHaloDensityProfile(args[0], params[0], params[1])/DMDensity(params[1]), 2);	},
+												{	return 4*M_PI*pow(NFWHaloDensityProfile(args[0], params[0], params[1])/DMDensity(params[1]), 2);	},
 													0,  1e99, 2);		// check range
 	
-	std::function<double(const double, const double, const double)> SourceDensityWithSubhaloBoost = 
-							[this, NFWIntegrand] (const double r, const double M, const double z)  
-							{	NFWIntegrand->SetParameters(M, z);
-								return pow(NFWHaloDensityProfile(r, M, z)/DMDensity(z), 2) + 
-												SubhaloBoostFactor(M)* NFWHaloDensityProfile(r, M, z)/M * NFWIntegrand->Integral(0, pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.), 1e-4); // Integrate to r_vir
-							}; 
+	auto SourceDensityWithSubhaloBoost = std::make_shared<Interpolation3DWrapper>(r.data(), r.size(), M.data(), M.size(), z.data(), z.size());
 	
+	for(unsigned int i = 0; i < M.size(); i++)
+	{
+		for(unsigned int j = 0; j < r.size(); j++)
+		{
+			for(unsigned int l = 0; l < z.size(); l++)
+			{
+				NFWIntegrand->SetParameters(M.at(i), z.at(l));
+				SourceDensityWithSubhaloBoost->Val(j, i, l) = pow(NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/DMDensity(z.at(l)), 2) + 
+												SubhaloBoostFactor(M.at(i))* NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/M.at(i) * NFWIntegrand->Integral(0, pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))), 1./3.), 1e-4);	
+			}																													// Integrate to r_vir
+		}
+	}
+	SourceDensityWithSubhaloBoost->print();
 	// TODO: calculate this on a grid to avoid the thousand nested integrals
 	
 	auto FTIntegrand = std::make_shared<TF1>("Integrand f(r)*r*sin(kr)/k for FT",
 										[SourceDensityWithSubhaloBoost] (double* args, double* params) //args[0]:r  params[0]:k  params[1]: M  params[2]: z
-										{	return SourceDensityWithSubhaloBoost(args[0], params[1], params[2])*args[0] * sin(params[0]*args[0])/params[0]; },
+										{	return SourceDensityWithSubhaloBoost->Eval(args[0], params[1], params[2])*args[0] * sin(params[0]*args[0])/params[0]; },
 										0, 1e99, 3);
 	
-	SourceDensitySubhaloBoostFT = [this, FTIntegrand] ( const double k, const double M, const double z)
-									{  FTIntegrand->SetParameters(k, M, z);
-										return 4*M_PI * FTIntegrand->Integral(0, pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.), 1e-4); };
+	auto SDSBSpline = std::make_shared<Interpolation3DWrapper>(M.data(), M.size(), k.data(), k.size(), z.data(), z.size());
+	
+	for(unsigned int i = 0; i < M.size(); i++)
+	{
+		for(unsigned int j = 0; j < k.size(); j++)
+		{
+			for(unsigned int l = 0; l < z.size(); l++)
+			{
+				FTIntegrand->SetParameters(k.at(j), M.at(i), z.at(l));
+				SDSBSpline->Val(i, j, l) = 4*M_PI * FTIntegrand->Integral(0, pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))), 1./3.), 1e-4);
+			}
+		}
+	}
+	
+	SourceDensitySubhaloBoostFT = [SDSBSpline] ( const double k, const double M, const double z)
+									{  return SDSBSpline->Eval(M, k, z); };
 }
 
 /// Calculates the clumping factor 
