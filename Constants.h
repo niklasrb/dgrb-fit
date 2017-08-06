@@ -3,11 +3,14 @@
 
 #include <tuple>
 
-//Speed of light km/s
+// Speed of light km/s
 const double c_0 = 2.9979e5;
 
-//Hubble constant in km / s*MPc
+// Hubble constant in km / s*MPc
 const double H_0 = 67.74;
+
+// Hubble parameter
+const double h = H_0/100.;
 
 // Gravtity constant in km^3 / kg*s^2
 const double G = 6.67e-20;
@@ -17,6 +20,7 @@ const double M_solar = 1.988e20;
 
 // Joule To GeV
 const double e = 1.6e-13;
+
 
 // Mass reference
 //constexpr double operator "" _M_solar(long double d) {return d;}
