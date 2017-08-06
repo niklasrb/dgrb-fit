@@ -9,7 +9,7 @@
 #include <cassert>
 #include <vector>
 
-#include "gsl2DInterpolationWrapper.h"
+#include "InterpolationWrapper.h"
 #include "EBLAbsorbtionCoefficient.h"
 #include "LinearMatterPowerSpectrum.h"
 

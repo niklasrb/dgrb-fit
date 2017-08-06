@@ -2,7 +2,7 @@
 #define EBLABSORBTIONCOEFFICIENT_H
 
 #include <cmath>
-#include "gsl2DInterpolationWrapper.h"
+#include "InterpolationWrapper.h"
 
 
 class EBLAbsorbtionCoefficient

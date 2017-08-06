@@ -2,7 +2,7 @@
 #define LINEARMATTERPOWERSPECTRUM_H
 
 
-#include "gsl2DInterpolationWrapper.h"
+#include "InterpolationWrapper.h"
 
 
 class LinearMatterPowerSpectrum
