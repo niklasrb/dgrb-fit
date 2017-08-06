@@ -49,7 +49,7 @@ public:
 							return this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  * pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) * this->EnergySpectrum(E*(1.+z), z) * exp(-(*(this->tau))(E,z)); };
 	
 		SourceDensityFT = [this] (const double k, const double M, const double z)
-						{ return this->HM->SourceDensitySubhaloBoostFT(k, M, z) / pow(this->HM->ClumpingFactor(z), 2.); };
+						{ return this->HM->SourceDensitySubhaloBoostFT(k, M, z) / this->HM->ClumpingFactor(z); };
 	}
 	
 	
