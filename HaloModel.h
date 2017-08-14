@@ -31,7 +31,7 @@ protected:
 	std::shared_ptr<LinearMatterPowerSpectrum> Plin;	// A pointer to a class modelling the linear matter power spectrum
 	
 	const double CriticalOverdensity = 1.686; 			// Critical Overdensity for spherical collapse
-	const double VirialOverdensity = 18*M_PI*M_PI;		// Or 200?
+	const double VirialOverdensity = 200.;//18*M_PI*M_PI;		// Or 200?
 	Bounds MBounds;										// The mass bounds this Halo Model will modell
 	Bounds zBounds;										// redshift bounds this Halo Model will modell
 	Bounds kBounds;										// k bounds
@@ -293,48 +293,56 @@ double HaloModel::NFWHaloDensityProfile(const double r, const double M, const do
 	const double c = ConcentrationParameter(M);
 	const double r_vir = pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.);
 	const double r_s = c/r_vir;
-	const double rho_s = M/(4*M_PI*pow(r_s,3)) * (log(1+c) - c/(1+c));
-	return rho_s*r_s/(r*pow(1+ r/r_s, 2));
+	const double rho_s = M/(4*M_PI*pow(r_s,3)) * (log(1.+c) - c/(1.+c));
+	//std::cout << "NFW: " << r << '\t' << M << '\t' << c << '\t' << r_vir << '\t' << r_s << '\t' << rho_s << '\t' << rho_s*r_s/(r*pow(1.+ r/r_s, 2)) << std::endl;
+	return rho_s*r_s/(r*pow(1.+ r/r_s, 2));
 }
 
 ///Calculates the Fourier transform of the Source Density with a subhalo boost
 void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std::vector<double>& k, std::vector<double>& z)
 {
 	// we need a different r grid
-	std::vector<double> r; r.resize(2*M.size());
-	for(unsigned int i = 0; i < M.size(); i++)
-	{
-		r.at(2*i) = pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.);
-		r.at(2*i+1) = pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(z.size()-1))), 1./3.);
-	}
-	std::sort(r.begin(), r.end());
+	std::vector<double> r; r.resize(M.size());
+	Bounds rBounds; rBounds.first = pow(3*M[0] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.)*1e-10;
+	rBounds.second = pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.);
+	//std::cout << pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.) << '\t' << pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.) <<std::endl;
+	
+	for(unsigned int i = 0; i < r.size(); i++) r[i] = exp( log(rBounds.first) + i*(log(rBounds.second) - log(rBounds.first))/(r.size()-1.) );
+	
 	
 	auto NFWIntegrand = std::make_shared<TF1>("NFW halo density ^2", 
-												[this] ( double* args, double* params) // args[0]: r  params[0]: M  params[1]: z
-												{	return 4*M_PI*pow(NFWHaloDensityProfile(args[0], params[0], params[1])/DMDensity(params[1]), 2);	},
-													0,  1e99, 2);		// check range
+												[this] ( double* args, double* params) // args[0]: log(r)  params[0]: M  params[1]: z
+												{	const double nfw = NFWHaloDensityProfile(exp(args[0]), params[0], params[1]);
+													//std::cout << exp(args[0]) << '\t' << nfw << '\t' << DMDensity(params[1]) << '\t' << pow(nfw/DMDensity(params[1]), 2.) << std::endl;
+													return exp(args[0])*pow(nfw/DMDensity(params[1]), 2.);	},
+													log(rBounds.first),  log(rBounds.second), 2);		// check range
 	
 	auto SourceDensityWithSubhaloBoost = std::make_shared<Interpolation3DWrapper>(r.data(), r.size(), M.data(), M.size(), z.data(), z.size());
+	double NFWsqIntegrated = 0;
 	
 	for(unsigned int i = 0; i < M.size(); i++)
 	{
-		for(unsigned int j = 0; j < r.size(); j++)
+		for(unsigned int l = 0; l < z.size(); l++)  
 		{
-			for(unsigned int l = 0; l < z.size(); l++)
-			{
-				NFWIntegrand->SetParameters(M.at(i), z.at(l));
+			NFWIntegrand->SetParameters(M.at(i), z.at(l));
+			std::cout << 3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))) << '\t' << log(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l)))) << std::endl;
+			NFWsqIntegrated = NFWIntegrand->Integral(log(rBounds.first), log(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))))/3., 1e-4);
+			
+			for(unsigned int j = 0; j < r.size(); j++)
+			{				
 				SourceDensityWithSubhaloBoost->Val(j, i, l) = pow(NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/DMDensity(z.at(l)), 2) + 
-												SubhaloBoostFactor(M.at(i))* NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/M.at(i) * NFWIntegrand->Integral(0, pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))), 1./3.), 1e-4);	
+												SubhaloBoostFactor(M.at(i))* NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/M.at(i) * NFWsqIntegrated;
+				std::cout << M.at(i) << '\t' << r.at(j) << '\t' << z.at(l) << '\t' << SourceDensityWithSubhaloBoost->Val(j, i, l) << std::endl;
 			}																													// Integrate to r_vir
 		}
 	}
-	SourceDensityWithSubhaloBoost->print();
+	//SourceDensityWithSubhaloBoost->print();'
 	// TODO: calculate this on a grid to avoid the thousand nested integrals
 	
 	auto FTIntegrand = std::make_shared<TF1>("Integrand f(r)*r*sin(kr)/k for FT",
-										[SourceDensityWithSubhaloBoost] (double* args, double* params) //args[0]:r  params[0]:k  params[1]: M  params[2]: z
-										{	return SourceDensityWithSubhaloBoost->Eval(args[0], params[1], params[2])*args[0] * sin(params[0]*args[0])/params[0]; },
-										0, 1e99, 3);
+										[SourceDensityWithSubhaloBoost] (double* args, double* params) //args[0]:log(r)  params[0]:k  params[1]: M  params[2]: z
+										{	return SourceDensityWithSubhaloBoost->Eval(exp(args[0]), params[1], params[2])*exp(2*args[0]) * sin(params[0]*exp(args[0]))/params[0]; },
+										log(rBounds.first), log(rBounds.second), 3);
 	
 	auto SDSBSpline = std::make_shared<Interpolation3DWrapper>(M.data(), M.size(), k.data(), k.size(), z.data(), z.size());
 	
@@ -345,7 +353,9 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std
 			for(unsigned int l = 0; l < z.size(); l++)
 			{
 				FTIntegrand->SetParameters(k.at(j), M.at(i), z.at(l));
-				SDSBSpline->Val(i, j, l) = 4*M_PI * FTIntegrand->Integral(0, pow(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))), 1./3.), 1e-4);
+				std::cout << k.at(j) << '\t' << M.at(i) << '\t' << z.at(l) << '\t' << pow(3.*M.at(i) /(4.*M_PI*VirialOverdensity*DMDensity(z.at(l))), 1./3.) << std::endl;
+				SDSBSpline->Val(i, j, l) = 4*M_PI * FTIntegrand->Integral(log(rBounds.first), log(3.*M.at(i) /(4.*M_PI*VirialOverdensity*DMDensity(z.at(l))))/3. , 1e-4);
+				std::cout << SDSBSpline->Val(i, j, l) << std::endl;
 			}
 		}
 	}
