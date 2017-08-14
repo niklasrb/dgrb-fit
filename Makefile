@@ -1,21 +1,27 @@
-VERSION = 4.1
-CC = g++
-#ROOTSYS = /lib/root/root
+VERSION := 4.1
+CC := g++
 
-CFLAGS = -Wall -g  $(sh $ROOTSYS/bin/root-config --cflags) #-I$(ROOTSYS)/include
-LDFLAGS = -ggdb $(sh $ROOTSYS/bin/root-config --cflags --glibs) 
-#-lgsl -lgslcblas -lncurses -L$(ROOTSYS)/lib -lGui -lCore -lRIO -lNet -lHist -lGraf -lGraf3d -lGpad -lTree -lRint -lPostscript -lMatrix -lPhysics -lMathCore -lThread -lMultiProc -pthread -lm -ldl -rdynamic
+DEBUG := TRUE
 
-#$(sh $ROOTSYS/bin/root-config --cflags --glibs) -lgsl -lgslcblas -lm -lncurses -ggdb #-lnest3 
+#ROOTSYS = /usr/lib/root
+LIBNEST := /usr/local/lib/libnest/
 
-SOURCE = main.cpp
-OBJ = main.o
+CFLAGS := -Wall -g -I$(ROOTSYS)/include $(shell $(ROOTSYS)/bin/root-config --cflags) 
+LDFLAGS := $(shell $(ROOTSYS)/bin/root-config --cflags --glibs) -lgsl -lgslcblas -L$(LIBNEST) -lnest3 -llapack -lgfortran
+
+ifeq ($(DEBUG), TRUE)
+	LDFLAGS := -v -ggdb $(LDFLAGS) 
+endif
+
+DEPS :=  Constants.h InterpolationWrapper.h  CosmologyModel.h Benchmarking.h HaloModel.h Source.h DarkMatter.h AstrophysicalSource.h BLLAC.h FSRQ.h MAGN.h SFG.h EBLAbsorbtionCoefficient.h GalaxyCatalog.h AngularPowerSpectrum.h LinearMatterPowerSpectrum.h LoadFromFiles.h
+SOURCE := main.cpp
 
 
 default: main
 
-%.o: %.cpp
-	$(CC) $(CFLAGS) -c $*.cpp
 
-main: $(OBJ)
-	$(CC)  $(CFLAGS) $(LDFLAGS) $(SOURCE) 
+main: $(DEPS) $(SOURCE)
+	$(CC) -o main -O3 $(SOURCE) $(CFLAGS) $(LDFLAGS) 
+
+clear:
+	rm main 
