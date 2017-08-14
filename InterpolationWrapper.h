@@ -318,12 +318,13 @@ void gsl1DInterpolationWrapper::print()
 class Interpolation3DWrapper
 {
 protected:
-double* x; unsigned int n_x; Bounds xBounds;
-double* y; unsigned int n_y; Bounds yBounds;
-double* z; unsigned int n_z; Bounds zBounds;
+double* x; unsigned int n_x; 
+double* y; unsigned int n_y; 
+double* z; unsigned int n_z; 
 double* f;
 
 double interp(const double& _x, const double& _y, const double& _z);	// no bounds checking!
+double extrap(const double& _x, const double& _y, const double& _z);
 double& access(unsigned int i, unsigned int j, unsigned int k);			// no bounds checking!
 
 public:
@@ -360,9 +361,6 @@ Interpolation3DWrapper::Interpolation3DWrapper(const double* _x,unsigned int n_x
 		z[i] = _z[i];
 		if(i > 0) assert(z[i] > z[i-1]);
 	}
-	xBounds.first = x[0];  xBounds.second = x[n_x-1];
-	yBounds.first = y[0];  yBounds.second = y[n_y-1];
-	zBounds.first = z[0];  zBounds.second = z[n_z-1];
 	
 	f = new double[n_x*n_y*n_z];
 	for(unsigned int i = 0; i < n_x*n_y*n_z; i++) f[i] = 0;
@@ -384,6 +382,30 @@ double& Interpolation3DWrapper::Val(unsigned int i,unsigned int j,unsigned int k
 
 double Interpolation3DWrapper::interp(const double& _x, const double& _y, const double& _z)
 {
+	unsigned int i = 1; unsigned int j = 1; unsigned int k = 1;
+	while(x[i] < _x && i <= n_x-2) i++;
+	while(y[j] < _y && j <= n_y-2) j++;
+	while(z[k] < _z && k <= n_z-2) k++;
+	
+	const double x_d = (_x - x[i-1])/(x[i] - x[i-1]);
+	const double y_d = (_y - y[j-1])/(y[j] - y[j-1]);
+	const double z_d = (_z - z[k-1])/(z[k] - z[k-1]);
+	
+	// interpolate in x
+	const double c00 = access(i-1, j-1, k-1)*(1.-x_d) + access(i, j-1, k-1)*x_d;
+	const double c01 = access(i-1, j-1, k)*(1.-x_d) + access(i, j-1, k)*x_d;
+	const double c10 = access(i-1, j, k-1)*(1.-x_d) + access(i, j, k-1)*x_d;
+	const double c11 = access(i-1, j, k)*(1.-x_d) + access(i, j, k)*x_d;
+	
+	// interpolate in y
+	const double c0 = c00*(1.-y_d) + c10*y_d;
+	const double c1 = c01*(1.-y_d) + c11*y_d;
+	
+	return c0*(1.-z_d) + c1*z_d;
+}
+/*
+double Interpolation3DWrapper::extrap(const double& _x, const double& _y, const double& _z)
+{
 	int i = 0; int j = 0; int k = 0;
 	while(x[i] < _x) i++;
 	while(y[j] < _y) j++;
@@ -404,13 +426,13 @@ double Interpolation3DWrapper::interp(const double& _x, const double& _y, const 
 	const double c1 = c01*(1.-y_d) + c11*y_d;
 	
 	return c0*(1.-z_d) + c1*z_d;
-}
+}*/
 
 double Interpolation3DWrapper::Eval(const double& _x, const double& _y, const double& _z)
 {
-	assert(xBounds.first < _x && xBounds.second > _x);
-	assert(yBounds.first < _y && yBounds.second > _y);
-	assert(zBounds.first < _z && zBounds.second > _z);
+	assert(x[0] <= _x && x[n_x-1] >= _x);
+	assert(y[0] <= _y && y[n_y-1] >= _y);
+	assert(z[0] <= _z && z[n_z-1] >= _z);
 	return interp(_x, _y, _z);
 }
 
@@ -419,7 +441,7 @@ double& Interpolation3DWrapper::access(unsigned int i, unsigned int j, unsigned 
 	return f[i + n_x * (j + n_y * k)];	// god please be right
 }
 
-Interpolation3DWrapper::Interpolation3DWrapper(const Interpolation3DWrapper& iw) : n_x(iw.n_x), xBounds(iw.xBounds), n_y(iw.n_y), yBounds(iw.yBounds), n_z(iw.n_z), zBounds(iw.zBounds)
+Interpolation3DWrapper::Interpolation3DWrapper(const Interpolation3DWrapper& iw) : n_x(iw.n_x), n_y(iw.n_y), n_z(iw.n_z)
 {
 	x = new double[n_x];
 	y = new double[n_y];
@@ -435,9 +457,9 @@ Interpolation3DWrapper& Interpolation3DWrapper::operator =(const Interpolation3D
 {
 	if(this == &iw) return *this;
 	Interpolation3DWrapper tmp(iw);
-	std::swap(x, tmp.x); std::swap(n_x, tmp.n_x); std::swap(xBounds, tmp.xBounds);
-	std::swap(x, tmp.y); std::swap(n_y, tmp.n_y); std::swap(yBounds, tmp.yBounds);
-	std::swap(z, tmp.z); std::swap(n_z, tmp.n_z); std::swap(zBounds, tmp.zBounds);
+	std::swap(x, tmp.x); std::swap(n_x, tmp.n_x);
+	std::swap(x, tmp.y); std::swap(n_y, tmp.n_y);
+	std::swap(z, tmp.z); std::swap(n_z, tmp.n_z);
 	std::swap(f, tmp.f);	
 	return *this;
 }
