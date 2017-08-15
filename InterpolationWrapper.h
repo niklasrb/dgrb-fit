@@ -306,8 +306,8 @@ double gsl1DInterpolationWrapper::Derivative(const double _x)
 
 void gsl1DInterpolationWrapper::print()
 {
-	std::cout << "gsl1D interp wrapper: " << spline << std::endl;
-	std::cout << n <<" values: " << std::endl;
+	std::cout << "gsl1D interp wrapper: " << spline;
+	std::cout << '\t' << n <<" values: " << std::endl;
 	for(unsigned int i = 0; i < n; i++)
 			std::cout << "[" << x[i] <<  ", " << y[i] << "]" << (i == (n-1) ? '\n' : '\t');
 }
