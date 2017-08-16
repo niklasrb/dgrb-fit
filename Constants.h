@@ -16,7 +16,7 @@ const double h = H_0/100.;
 const double G = 6.67e-20;
 
 // Solar Mass in kg
-const double M_solar = 1.988e20;
+const double M_solar = 1.988e30;
 
 // Joule To GeV
 const double e = 1.6e-13;
