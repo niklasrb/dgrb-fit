@@ -45,7 +45,8 @@ public:
 	LambdaCDM(Bounds zBounds, unsigned int zGridLen)
 	{
 		O_m = 0.27;  			// matter density
-		CriticalDensity = 3.*H_0*H_0/(8.*M_PI*G)  *(3.0856776e22)/M_solar ;	// in  M_solar /  MPc^3
+		CriticalDensity = 3.*H_0*H_0/(8.*M_PI*G)  *(1.551812e-11) ;	// in  M_solar /  MPc^3
+															// converted kg / (Mpc^2  km) to solar mass / (Mpc^3)
 		d_H = c_0/H_0; 		// Hubble distance		
 		O_r = 0.; 			// radiation density
 		O_l = 0.73;			// dark energy density
