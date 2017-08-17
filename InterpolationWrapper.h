@@ -25,10 +25,12 @@ protected:
 	double* y; unsigned int n_y;
 	double* z;
 	const gsl_interp2d_type* T;
+	bool initiated;
 
 public:
 	// Main constructor
 	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const double** _z, const gsl_interp2d_type* T);
+	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const gsl_interp2d_type* T);
 	gsl2DInterpolationWrapper(const gsl2DInterpolationWrapper& w);
 	~gsl2DInterpolationWrapper();
 	
@@ -48,6 +50,12 @@ public:
 	
 	// Extrapolates explicitly
 	double Extrapolate(const double _x, const double _y);
+	
+	// Allows acces to z
+	double& Val(unsigned int i, unsigned int y);
+	
+	// Performs initiation of gsl
+	void Initialize();
 	
 	// Outputs most data for debugging purposes
 	void print();
@@ -74,7 +82,7 @@ gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const double* _x, const uns
 		x[i] = _x[i];
 		for(unsigned int j = 0; j < n_y; j++)
 		{
-			y[j] = _y[j];
+			if(i ==0) y[j] = _y[j];
 			gsl_interp2d_set(spline, z, i, j, _z[i][j]);
 			//z[i+n_x*j] = _z[i][j];
 		}
@@ -82,7 +90,24 @@ gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const double* _x, const uns
 	gsl_interp2d_init(spline, x, y, z, n_x, n_y);
 	xBounds.first = x[0];  xBounds.second = x[n_x-1];
 	yBounds.first = y[0];  yBounds.second = y[n_y-1];
-	
+	initiated = true;
+}
+
+gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const gsl_interp2d_type* T= gsl_interp2d_bilinear) : n_x(n_x), n_y(n_y), T(T)
+{
+	x = new double[n_x];
+	y = new double[n_y];
+	z = new double[n_x*n_y];
+	spline = gsl_interp2d_alloc(T, n_x, n_y);
+	x_acc = gsl_interp_accel_alloc();
+	y_acc = gsl_interp_accel_alloc();
+	for(unsigned int i = 0; i < n_x; i++)
+		x[i] = _x[i];
+	for(unsigned int j = 0; j < n_y; j++)
+		y[j] = _y[j];
+	xBounds.first = x[0];  xBounds.second = x[n_x-1];
+	yBounds.first = y[0];  yBounds.second = y[n_y-1];
+	initiated = false;
 }
 
 gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const gsl2DInterpolationWrapper& w) : xBounds(w.xBounds), yBounds(w.yBounds), n_x(w.n_x), n_y(w.n_y),  T(w.T)
@@ -103,6 +128,7 @@ gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const gsl2DInterpolationWra
 		}
 	}
 	gsl_interp2d_init(spline, x, y, z, n_x, n_y);
+	initiated = true;
 }
 
 gsl2DInterpolationWrapper::~gsl2DInterpolationWrapper()
@@ -123,7 +149,7 @@ gsl2DInterpolationWrapper& gsl2DInterpolationWrapper::operator =(const gsl2DInte
 	std::swap(y, tmp.y); std::swap(n_y, tmp.n_y);
 	std::swap(z, tmp.z);
 	std::swap(spline, tmp.spline); std::swap(x_acc, tmp.x_acc); std::swap(y_acc, tmp.y_acc);
-	std::swap(T, tmp.T); std::swap(xBounds, tmp.xBounds); std::swap(yBounds, tmp.yBounds);
+	std::swap(T, tmp.T); std::swap(xBounds, tmp.xBounds); std::swap(yBounds, tmp.yBounds);  std::swap(tmp.initiated, initiated);
 	return *this;
 }
 
@@ -165,6 +191,20 @@ void gsl2DInterpolationWrapper::print()
 	for(unsigned int i = 0; i < n_x; i++)
 		for(unsigned int j = 0; j < n_y; j++)
 			std::cout << "[" << x[i] << ", " << y[j] << ", " << z[j*n_x + i] << "]" << (i*j == (n_x-1)*(n_y-1) ? '\n' : '\t');
+}
+
+double& gsl2DInterpolationWrapper::Val(unsigned int i, unsigned int j)
+{
+	assert(i < n_x && j < n_y);
+	return z[i+n_x*j];
+}
+	
+	// Performs initiation of gsl
+void gsl2DInterpolationWrapper::Initialize()
+{
+	if(initiated) return;
+	gsl_interp2d_init(spline, x, y, z, n_x, n_y);
+	initiated = true;
 }
 
 
