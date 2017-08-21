@@ -23,6 +23,11 @@ public:
 		return data[EBin1][EBin2][Multipole];
 	}
 	
+	virtual T& at(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)
+	{
+		return (*this)(EBin1, EBin2, Multipole);
+	}
+	
 	/// Use this constructor if you dont't have the data yet, or don't want to deal with memory
 	AngularPowerSpectrum(unsigned int nBin1, unsigned int nBin2, unsigned int nMul) : nBin1(nBin1), nBin2(nBin2), nMul(nMul)
 	{
@@ -100,7 +105,7 @@ template<typename T>
 class AstrophysicalSourceAPS :	public AngularPowerSpectrum<T>
 {
 public:
-	AstrophysicalSourceAPS(std::vector<Bounds>& EBins) : AngularPowerSpectrum<T>::AngularPowerSpectrum(EBins.size(), EBins.size(), 1)	{	}
+	AstrophysicalSourceAPS(const std::vector<Bounds>& EBins) : AngularPowerSpectrum<T>::AngularPowerSpectrum(EBins.size(), EBins.size(), 1)	{	}
 	
 	
 	T& operator ()(unsigned int EBin1, unsigned int EBin2)
@@ -113,6 +118,11 @@ public:
 	{
 		assert(EBin1 < this->nBin1  && EBin2 < this->nBin2);
 		return this->data[EBin1][EBin2][0];
+	}
+	
+	T& at(unsigned int EBin1, unsigned int EBin2)
+	{
+		return (*this)(EBin1, EBin2);
 	}
 	
 };
