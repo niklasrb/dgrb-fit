@@ -10,9 +10,70 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <memory>
+
+class gsl1DInterpolationWrapper;
+class gsl2DInterpolationWrapper;
+class Interpolation3DWrapper;
 
 
+/// 1D Interpolation
+class gsl1DInterpolationWrapper
+{
+friend class gsl2DInterpolationWrapper;
+protected:
+	gsl_interp* spline;
+	gsl_interp_accel* x_acc;
+	Bounds xBounds;
+	double* x; unsigned int n;
+	double* y;
+	const gsl_interp_type* T;
+	const double outOfBounds;
 
+public:
+	// Main constructor
+	gsl1DInterpolationWrapper(const double* _x, const unsigned int n, const double* _y, const gsl_interp_type* T, double outOfBounds);
+	gsl1DInterpolationWrapper();
+	gsl1DInterpolationWrapper(const gsl1DInterpolationWrapper& w);
+	~gsl1DInterpolationWrapper();
+	
+	gsl1DInterpolationWrapper& operator =(const gsl1DInterpolationWrapper& w);
+	
+	// calls Eval
+	double operator ()(const double _x);
+	
+	// Perfoms bounds checking and return outOfBounds value in case
+	double Eval(const double _x);
+	
+	// Perfoms bounds checking and returns false for out of bounds
+	bool Interpolate(const double _x, double* _y);
+	
+	// Perfoms bounds checking and returns NAN for out of bounds
+	double Interpolate(const double _x);
+	
+	// Performs bound checking (NAN for out of bounds) and returns the derivative at _x
+	double Derivative(const double _x);
+	
+	// Outputs most data for debugging purposes
+	void print();
+	
+	// Allows multiplication if they have the same grid!
+	friend gsl1DInterpolationWrapper operator*(const gsl1DInterpolationWrapper& iw1, const gsl1DInterpolationWrapper& iw2)
+	{
+		assert(iw1.n == iw2.n);
+		for(unsigned int i = 0; i < iw1.n; i++) assert(iw1.x[i] == iw2.x[i]);
+		double* y = new double[iw1.n];
+		for(unsigned int i = 0; i < iw1.n; i++) y[i] = iw1.y[i] * iw2.y[i];
+		gsl1DInterpolationWrapper res(iw1.x, iw1.n, y, iw1.T, iw1.outOfBounds*iw2.outOfBounds);
+		delete []y;
+		return res;
+	}
+	
+	Bounds get_xBounds() { return xBounds; }
+};
+
+
+/// 2D Interpolation
 class gsl2DInterpolationWrapper
 {
 protected:
@@ -31,6 +92,7 @@ public:
 	// Main constructor
 	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const double** _z, const gsl_interp2d_type* T);
 	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const gsl_interp2d_type* T);
+	
 	gsl2DInterpolationWrapper(const gsl2DInterpolationWrapper& w);
 	~gsl2DInterpolationWrapper();
 	
@@ -54,7 +116,7 @@ public:
 	// Allows acces to z
 	double& Val(unsigned int i, unsigned int y);
 	
-	// Performs initiation of gsl
+	// Performs initiation of gsl if values weren't specified on construction
 	void Initialize();
 	
 	// Outputs most data for debugging purposes
@@ -62,9 +124,112 @@ public:
 	
 	Bounds get_xBounds() { return xBounds; }
 	Bounds get_yBounds() { return yBounds; }
+	
+	static gsl2DInterpolationWrapper Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > splines, const std::vector<double>& y);
 };
 
 
+/// gsl1DInterpolation
+
+
+gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(const double* _x, const unsigned int n, const double* _y, const gsl_interp_type* T= gsl_interp_linear, double outOfBounds = NAN) : n(n), T(T), outOfBounds(outOfBounds)
+{
+	x = new double[n];
+	y = new double[n];
+	spline = gsl_interp_alloc(T, n);
+	x_acc = gsl_interp_accel_alloc();
+	for(unsigned int i = 0; i < n; i++)
+	{
+		x[i] = _x[i];
+		y[i] = _y[i];		
+	}
+	gsl_interp_init(spline, x, y, n);
+	xBounds.first = x[0];  xBounds.second = x[n-1];	
+}
+
+// Constructs an Interpolator that always return NAN
+gsl1DInterpolationWrapper::gsl1DInterpolationWrapper() : T(gsl_interp_linear), outOfBounds(NAN)
+{
+	n = 2;
+	x = new double[n]; y = new double[n];
+	x[0] = 0; x[1] = 1;  y[0] = NAN; y[1] = NAN;
+	xBounds.first = 0; xBounds.second = -1;
+	spline = gsl_interp_alloc(T, n);
+	x_acc = gsl_interp_accel_alloc();
+	gsl_interp_init(spline, x, y, n);
+	
+}
+
+gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(const gsl1DInterpolationWrapper& w) : xBounds(w.xBounds), n(w.n),  T(w.T), outOfBounds(w.outOfBounds)
+{
+	x = new double[n];
+	y = new double[n];
+	spline = gsl_interp_alloc(T, n);
+	x_acc = gsl_interp_accel_alloc();
+	for(unsigned int i = 0; i < n; i++)
+	{
+		x[i] = w.x[i];
+		y[i] = w.y[i];
+	}
+	gsl_interp_init(spline, x, y, n);
+}
+
+gsl1DInterpolationWrapper::~gsl1DInterpolationWrapper()
+{
+	gsl_interp_free(spline);
+	gsl_interp_accel_free(x_acc);
+	delete []x;
+	delete []y;
+}
+
+gsl1DInterpolationWrapper& gsl1DInterpolationWrapper::operator =(const gsl1DInterpolationWrapper& w)
+{
+	if(this == &w) return *this;
+	gsl1DInterpolationWrapper tmp(w);
+	std::swap(x, tmp.x); std::swap(n, tmp.n);
+	std::swap(y, tmp.y); 
+	std::swap(spline, tmp.spline); std::swap(x_acc, tmp.x_acc);
+	std::swap(T, tmp.T); std::swap(xBounds, tmp.xBounds);
+	return *this;
+}
+
+double gsl1DInterpolationWrapper::operator ()(const double _x)
+{
+	return Eval(_x);	
+}
+
+double gsl1DInterpolationWrapper::Eval(const double _x)
+{
+	if( _x < xBounds.first ||  _x > xBounds.second)  
+		return outOfBounds;	
+	return gsl_interp_eval(spline, x, y, _x, x_acc);	
+}
+
+bool gsl1DInterpolationWrapper::Interpolate(const double _x, double* _y)
+{
+	if( _x < xBounds.first ||  _x > xBounds.second)  return false;
+	return (EDOM != gsl_interp_eval_e(spline, x, y, _x, x_acc, _y));
+}
+
+double gsl1DInterpolationWrapper::Interpolate(const double _x)
+{
+	if( _x < xBounds.first ||  _x > xBounds.second)  return NAN;
+	return  gsl_interp_eval(spline, x, y, _x, x_acc);
+}
+
+double gsl1DInterpolationWrapper::Derivative(const double _x)
+{
+	if( _x < xBounds.first ||  _x > xBounds.second)  return NAN;
+	return gsl_interp_eval_deriv(spline, x, y, _x, x_acc);
+}
+
+void gsl1DInterpolationWrapper::print()
+{
+	std::cout << "gsl1D interp wrapper: " << spline;
+	std::cout << '\t' << n <<" values: " << std::endl;
+	for(unsigned int i = 0; i < n; i++)
+			std::cout << "[" << x[i] <<  ", " << y[i] << "]" << (i == (n-1) ? '\n' : '\t');
+}
 
 
 /// gsl2DInterpolation
@@ -207,149 +372,28 @@ void gsl2DInterpolationWrapper::Initialize()
 	initiated = true;
 }
 
-
-/// gsl1DInterpolation
-
-
-class gsl1DInterpolationWrapper
+gsl2DInterpolationWrapper gsl2DInterpolationWrapper::Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > splines, const std::vector<double>& y)
 {
-protected:
-	gsl_interp* spline;
-	gsl_interp_accel* x_acc;
-	Bounds xBounds;
-	double* x; unsigned int n;
-	double* y;
-	const gsl_interp_type* T;
-	const double outOfBounds;
-
-public:
-	// Main constructor
-	gsl1DInterpolationWrapper(const double* _x, const unsigned int n, const double* _y, const gsl_interp_type* T, double outOfBounds);
-	gsl1DInterpolationWrapper();
-	gsl1DInterpolationWrapper(const gsl1DInterpolationWrapper& w);
-	~gsl1DInterpolationWrapper();
+	assert(splines.size() >= 2);
+	assert(y.size() == splines.size());
+	unsigned int n_y = y.size();
+	unsigned int n_x = splines[0]->n;
 	
-	gsl1DInterpolationWrapper& operator =(const gsl1DInterpolationWrapper& w);
-	
-	// calls Eval
-	double operator ()(const double _x);
-	
-	// Perfoms bounds checking and return outOfBounds value in case
-	double Eval(const double _x);
-	
-	// Perfoms bounds checking and returns false for out of bounds
-	bool Interpolate(const double _x, double* _y);
-	
-	// Perfoms bounds checking and returns NAN for out of bounds
-	double Interpolate(const double _x);
-	
-	// Performs bound checking (NAN for out of bounds) and returns the derivative at _x
-	double Derivative(const double _x);
-	
-	// Outputs most data for debugging purposes
-	void print();
-	
-	Bounds get_xBounds() { return xBounds; }
-};
-
-
-gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(const double* _x, const unsigned int n, const double* _y, const gsl_interp_type* T= gsl_interp_linear, double outOfBounds = NAN) : n(n), T(T), outOfBounds(outOfBounds)
-{
-	x = new double[n];
-	y = new double[n];
-	spline = gsl_interp_alloc(T, n);
-	x_acc = gsl_interp_accel_alloc();
-	for(unsigned int i = 0; i < n; i++)
+	for(unsigned int i = 1; i < splines.size(); i++)
 	{
-		x[i] = _x[i];
-		y[i] = _y[i];		
+		assert(splines[i]->n == splines[i-1]->n);
+		for(unsigned int j = 0; j < splines[i]->n; j++) assert(splines[i]->x[j] == splines[i-1]->x[j]);
 	}
-	gsl_interp_init(spline, x, y, n);
-	xBounds.first = x[0];  xBounds.second = x[n-1];	
-}
-
-// Constructs an Interpolator that always return NAN
-gsl1DInterpolationWrapper::gsl1DInterpolationWrapper() : T(gsl_interp_linear), outOfBounds(NAN)
-{
-	n = 2;
-	x = new double[n]; y = new double[n];
-	x[0] = 0; x[1] = 1;  y[0] = NAN; y[1] = NAN;
-	xBounds.first = 0; xBounds.second = -1;
-	spline = gsl_interp_alloc(T, n);
-	x_acc = gsl_interp_accel_alloc();
-	gsl_interp_init(spline, x, y, n);
-	
-}
-
-gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(const gsl1DInterpolationWrapper& w) : xBounds(w.xBounds), n(w.n),  T(w.T), outOfBounds(w.outOfBounds)
-{
-	x = new double[n];
-	y = new double[n];
-	spline = gsl_interp_alloc(T, n);
-	x_acc = gsl_interp_accel_alloc();
-	for(unsigned int i = 0; i < n; i++)
+	gsl2DInterpolationWrapper iw(splines[0]->x, n_x, y.data(), n_y);
+	for(unsigned int i = 0; i < n_x; i++)
 	{
-		x[i] = w.x[i];
-		y[i] = w.y[i];
+		for(unsigned int j = 0; j < n_y; j++)
+		{
+			iw.Val(i, j) = splines[j]->y[i]; // remember that y of gsl1DIW is the third axis in this case
+		}
 	}
-	gsl_interp_init(spline, x, y, n);
-}
-
-gsl1DInterpolationWrapper::~gsl1DInterpolationWrapper()
-{
-	gsl_interp_free(spline);
-	gsl_interp_accel_free(x_acc);
-	delete []x;
-	delete []y;
-}
-
-gsl1DInterpolationWrapper& gsl1DInterpolationWrapper::operator =(const gsl1DInterpolationWrapper& w)
-{
-	if(this == &w) return *this;
-	gsl1DInterpolationWrapper tmp(w);
-	std::swap(x, tmp.x); std::swap(n, tmp.n);
-	std::swap(y, tmp.y); 
-	std::swap(spline, tmp.spline); std::swap(x_acc, tmp.x_acc);
-	std::swap(T, tmp.T); std::swap(xBounds, tmp.xBounds);
-	return *this;
-}
-
-double gsl1DInterpolationWrapper::operator ()(const double _x)
-{
-	return Eval(_x);	
-}
-
-double gsl1DInterpolationWrapper::Eval(const double _x)
-{
-	if( _x < xBounds.first ||  _x > xBounds.second)  
-		return outOfBounds;	
-	return gsl_interp_eval(spline, x, y, _x, x_acc);	
-}
-
-bool gsl1DInterpolationWrapper::Interpolate(const double _x, double* _y)
-{
-	if( _x < xBounds.first ||  _x > xBounds.second)  return false;
-	return (EDOM != gsl_interp_eval_e(spline, x, y, _x, x_acc, _y));
-}
-
-double gsl1DInterpolationWrapper::Interpolate(const double _x)
-{
-	if( _x < xBounds.first ||  _x > xBounds.second)  return NAN;
-	return  gsl_interp_eval(spline, x, y, _x, x_acc);
-}
-
-double gsl1DInterpolationWrapper::Derivative(const double _x)
-{
-	if( _x < xBounds.first ||  _x > xBounds.second)  return NAN;
-	return gsl_interp_eval_deriv(spline, x, y, _x, x_acc);
-}
-
-void gsl1DInterpolationWrapper::print()
-{
-	std::cout << "gsl1D interp wrapper: " << spline;
-	std::cout << '\t' << n <<" values: " << std::endl;
-	for(unsigned int i = 0; i < n; i++)
-			std::cout << "[" << x[i] <<  ", " << y[i] << "]" << (i == (n-1) ? '\n' : '\t');
+	iw.Initialize();
+	return iw;
 }
 
 
