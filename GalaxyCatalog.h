@@ -16,7 +16,7 @@ protected:
 	double beta = 1;
 	double m = 0;
 	double z_0 = 1;
-	double S_t_1 = 0;
+	//double S_t_1 = 0;
 	
 public:
 	std::string name = "";
@@ -29,14 +29,14 @@ public:
 	std::function<double(const double k, const double M, const double z)> SourceDensityFT = 0;
 	std::function<double(const double z)> EffectiveGalaxyDensity = 0;
 	
-	double S_t_1GeV() { return S_t_1; }
+	/*double S_t_1GeV() { return S_t_1; }
 	
 	double DetectionEfficiency(const double S)
 	{
 		return DetectionEfficiency(S, S_t_1);
 	}
 	
-	static double DetectionEfficiency(const double S, const double S_t_1Gev);
+	static double DetectionEfficiency(const double S, const double S_t_1Gev);*/
 };
 
 double GalaxyCatalog::WindowFunction(const double z)
@@ -54,12 +54,12 @@ double GalaxyCatalog::N_satellite(const double M)
 	return powf(M/M_1, 2) * exp(-M/M_cut);
 }
 
-double GalaxyCatalog::DetectionEfficiency(const double S, const double S_t_1Gev)
+/*double GalaxyCatalog::DetectionEfficiency(const double S, const double S_t_1Gev)
 {
 	if(S >= S_t_1Gev)
 		return 1;
 	return pow(S / S_t_1Gev, 2.);
-}
+}*/
 
 
 
