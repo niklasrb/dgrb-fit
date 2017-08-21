@@ -23,7 +23,7 @@ protected:
 	Bounds zBounds;					// The redshift bounds in which the description is valid
 	Bounds GammaBounds;				// The Gamma distribution in which the description is most relevant
 	
-	std::function<double(const double S, const double Gamma, const double* other)> dNoverdS;	// Here an interpolation or otherwise calculated dN/dS can be stored at runtime
+	//std::function<double(const double S, const double Gamma, const double* other)> dNoverdS;	// Here an interpolation or otherwise calculated dN/dS can be stored at runtime
 	
 	AstrophysicalSource(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : DGRBSource(CM, tau) {}
 	AstrophysicalSource(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string name) : DGRBSource(CM, tau, name) {}
