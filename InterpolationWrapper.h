@@ -5,6 +5,8 @@
 #include <gsl/gsl_interp.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_spline.h>
+#include "TROOT.h"
+#include "TGraph.h"
 #include "Constants.h"
 #include <cassert>
 #include <iostream>
@@ -56,6 +58,8 @@ public:
 	
 	// Outputs most data for debugging purposes
 	void print();
+	
+	TGraph MakeGraph();
 	
 	// Allows multiplication if they have the same grid!
 	friend gsl1DInterpolationWrapper operator*(const gsl1DInterpolationWrapper& iw1, const gsl1DInterpolationWrapper& iw2)
@@ -229,6 +233,11 @@ void gsl1DInterpolationWrapper::print()
 	std::cout << '\t' << n <<" values: " << std::endl;
 	for(unsigned int i = 0; i < n; i++)
 			std::cout << "[" << x[i] <<  ", " << y[i] << "]" << (i == (n-1) ? '\n' : '\t');
+}
+
+TGraph gsl1DInterpolationWrapper::MakeGraph()
+{
+	return TGraph(n, x, y);
 }
 
 
