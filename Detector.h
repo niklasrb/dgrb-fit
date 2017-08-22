@@ -18,7 +18,7 @@ public:
 class FermiLAT : public Detector
 {
 public:
-	FermiLAT() : Detector(4.5e-10) 
+	FermiLAT() : Detector(5e-8) 
 	{
 		S_t_1 = {1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 6e-10, 7e-10, 8e-10, 9e-10, 10e-10};
 	}
