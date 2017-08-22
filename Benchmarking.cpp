@@ -43,6 +43,7 @@ void Benchmark::calculateIntensityAndAPSForAstrophysicalSources(std::vector<std:
 	}
 	if(m_plot) 
 	{
+		dIdzCanvas->SetyLimits(1e-8, 1e3);
 		(*dIdzCanvas)().BuildLegend();
 		(*dIdzCanvas)().SaveAs("dIdz.jpg");
 	}
@@ -168,7 +169,7 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 		}
 	}
 
-	//if(m_plot) plotIntermediates(source, 
+	if(m_plot) plotIntermediates(source, dNdESpline);
 	
 	/*std::cout << "Ebin\t Intensity\t APS" << std::endl; 
 	//for(unsigned int i = 0; i < EBins.size(); i++) std::cout << std::get<1>(EBins[i]) << '\t' << Intensity[i] << '\t' << APS[i] << std::endl;
@@ -314,7 +315,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 		TF1* Integrand = new TF1("1D Integrand for dI/dz",   
 								[source, SoverLSpline, this] (double* args, double* params) // args[0]: log(L)   params[0]: z   params[1]: Gamma, but should be irrelevant
 								{ double S = exp(args[0])* SoverLSpline->Eval(params[0], params[1]);
-									std::cout << "1D Integrand: " << exp(args[0]) << '\t' << S << '\t' << CM->ComovingVolume(params[0]) << '\t' << source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1]) << '\t' << (1.-DT->DetectionEfficiency(S)) << std::endl;
+									//std::cout << "1D Integrand: " << exp(args[0]) << '\t' << S << '\t' << CM->ComovingVolume(params[0]) << '\t' << source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1]) << '\t' << (1.-DT->DetectionEfficiency(S)) << std::endl;
 								  return exp(args[0])*S*CM->ComovingVolume(params[0])*source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1])*(1.-DT->DetectionEfficiency(S)); },
 								 log(LuminosityBounds_global.first), log(LuminosityBounds_global.second), /*npar*/ 2);
 		for(unsigned int i = 0; i < zGrid.size(); i++)
@@ -337,7 +338,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 		for(unsigned int i = 0; i < zGrid.size(); i++)
 		{
 			//std::cout << zGrid[i] << " - " << CM->ComovingVolume(zGrid[i]) << std::endl;
-			Integrand->SetParameters(zGrid[i], 0);
+			Integrand->SetParameters(zGrid[i], 0.);
 			dIoverdz.at(i) = Integrand->Integral(log(LuminosityBounds_global.first), log(LuminosityBounds_global.second), 
 												source->GammaBounds.first, source->GammaBounds.second , 1e-4);
 		}		
@@ -355,7 +356,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 	
 	if(m_plot)
 	{
-		auto g = new TGraph(dIdzSpline->MakeGraph());
+		auto g = new TGraph(dIdzSpline->MakeGraph()); g->SetLineColor(std::rand() % 20 + 1);
 		dIdzCanvas->AddGraph(g, source->Name, "L");
 	}	
 	
@@ -402,7 +403,12 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 	return dNdESpline;
 }
 
+void Benchmark::plotIntermediates(AstrophysicalSource* source, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline)
+{
+	return;
+}
 
+/// Darkmatter
 
 void Benchmark::calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> > DM)
 {

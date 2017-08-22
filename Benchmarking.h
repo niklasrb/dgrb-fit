@@ -9,6 +9,7 @@
 #include <limits>
 #include <algorithm>
 #include <fstream>
+#include <cstdlib>
 #include "TROOT.h"
 #include "TF1.h"
 #include "TF2.h"
@@ -74,7 +75,8 @@ private:
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtainEffectiveEnergySpectrum(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<Bounds>& EGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline);
-	//void plotIntermediates(AstrophysicalSource* source, std::shared_ptr<gsl2DInterpolationWrapper> dIdzSpline);
+	void plotIntermediates(AstrophysicalSource* source, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline);
+	
 	// For DM
 	void calculateAPSForDM(std::shared_ptr<DarkMatter> DM, const std::vector<Bounds>& EBins, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<int>& Multipoles);
 	void calculateIntensityForDM(std::shared_ptr<DarkMatter> DM, const std::vector<Bounds>& EBins);
