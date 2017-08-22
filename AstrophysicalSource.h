@@ -45,7 +45,7 @@ public:
 	
 	void printResults(double S_t_1);
 	
-	TGraph* MakeGraph()
+	TGraph MakeGraph()
 	{
 		std::vector<double> x, y;
 		for(unsigned int i = 0; i < Intensity.size(); i++) 
@@ -54,7 +54,7 @@ public:
 			y.push_back(Intensity[i].second);
 			//std::cout << x[i] << '\t' << y[i] << std::endl;
 		}
-		return new TGraph(x.size(), x.data(), y.data());
+		return TGraph(x.size(), x.data(), y.data());
 	}
 };
 
