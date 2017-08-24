@@ -10,6 +10,8 @@
 #include "Constants.h"
 #include <cassert>
 #include <iostream>
+#include <istream>
+#include <ostream>
 #include <cmath>
 #include <algorithm>
 #include <memory>
@@ -35,6 +37,7 @@ protected:
 public:
 	// Main constructor
 	gsl1DInterpolationWrapper(const double* _x, const unsigned int n, const double* _y, const gsl_interp_type* T, double outOfBounds);
+	gsl1DInterpolationWrapper(std::istream& i, const gsl_interp_type* T, double outOfBounds);
 	gsl1DInterpolationWrapper();
 	gsl1DInterpolationWrapper(const gsl1DInterpolationWrapper& w);
 	~gsl1DInterpolationWrapper();
@@ -58,6 +61,9 @@ public:
 	
 	// Outputs most data for debugging purposes
 	void print();
+	
+	// Saves data in the stream
+	void Save(std::ostream& o);
 	
 	TGraph MakeGraph();
 	
@@ -96,6 +102,7 @@ public:
 	// Main constructor
 	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const double** _z, const gsl_interp2d_type* T);
 	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const gsl_interp2d_type* T);
+	gsl2DInterpolationWrapper(std::istream& in, const gsl_interp2d_type* T);
 	
 	gsl2DInterpolationWrapper(const gsl2DInterpolationWrapper& w);
 	~gsl2DInterpolationWrapper();
@@ -126,10 +133,13 @@ public:
 	// Outputs most data for debugging purposes
 	void print();
 	
+	// Saves the data in the stream
+	void Save(std::ostream& o);
+	
 	Bounds get_xBounds() { return xBounds; }
 	Bounds get_yBounds() { return yBounds; }
 	
-	static gsl2DInterpolationWrapper Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > splines, const std::vector<double>& y);
+	static gsl2DInterpolationWrapper Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > &splines, const std::vector<double>& y);
 };
 
 
@@ -234,6 +244,24 @@ void gsl1DInterpolationWrapper::print()
 	for(unsigned int i = 0; i < n; i++)
 			std::cout << "[" << x[i] <<  ", " << y[i] << "]" << (i == (n-1) ? '\n' : '\t');
 }
+
+void gsl1DInterpolationWrapper::Save(std::ostream& o)
+{
+	o << n << std::endl;
+	for(unsigned int i = 0; i < n; i++) o << x[i] << '\t' << y[i] << std::endl;
+}
+
+gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(std::istream& in, const gsl_interp_type* T= gsl_interp_linear, double outOfBounds = NAN) : T(T), outOfBounds(outOfBounds)
+{
+	in >> n; assert(n > 0);
+	x = new double[n];  y = new double[n];
+	spline = gsl_interp_alloc(T, n);
+	x_acc = gsl_interp_accel_alloc();
+	for(unsigned int i = 0; i < n; i++) in >> x[i] >> y[i]; 
+	gsl_interp_init(spline, x, y, n);
+	xBounds.first = x[0];  xBounds.second = x[n-1];	
+}
+
 
 TGraph gsl1DInterpolationWrapper::MakeGraph()
 {
@@ -367,6 +395,49 @@ void gsl2DInterpolationWrapper::print()
 			std::cout << "[" << x[i] << ", " << y[j] << ", " << z[j*n_x + i] << "]" << (i*j == (n_x-1)*(n_y-1) ? '\n' : '\t');
 }
 
+void gsl2DInterpolationWrapper::Save(std::ostream& o)
+{
+	o << n_x << '\t' << n_y << std::endl;
+	for(unsigned int i = 0; i < n_x; i++)	// first write x value in a line
+		o << x[i] << (i < n_x-1 ? '\t' : '\n');
+	for(unsigned int i = 0; i < n_y; i++)	// then y values
+		o << y[i] << (i < n_y-1 ? '\t' : '\n');
+	for(unsigned int i = 0; i < n_x; i++)	// then write z values in one line
+	{
+		for(unsigned int j = 0; j < n_y; j++)
+		{
+			o << z[i+n_x*j] << ((i < n_x-1)||(j < n_y-1) ? '\t' : '\n');
+		}
+	}
+}
+
+gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(std::istream& in, const gsl_interp2d_type* T= gsl_interp2d_bilinear) : T(T)
+{
+	in >> n_x >> n_y;
+	assert(n_x >= 2 && n_y >= 2);
+	x = new double[n_x];
+	y = new double[n_y];
+	z = new double[n_x*n_y];
+	spline = gsl_interp2d_alloc(T, n_x, n_y);
+	x_acc = gsl_interp_accel_alloc();
+	y_acc = gsl_interp_accel_alloc();
+	for(unsigned int i = 0; i < n_x; i++)
+		in >> x[i];
+	for(unsigned int i = 0; i < n_y; i++)
+		in >> y[i];
+	for(unsigned int i=0; i < n_x; i++)
+	{
+		for(unsigned int j = 0; j < n_y; j++)
+		{
+			in >> z[i+n_x*j];
+		}
+	}
+	gsl_interp2d_init(spline, x, y, z, n_x, n_y);
+	xBounds.first = x[0];  xBounds.second = x[n_x-1];
+	yBounds.first = y[0];  yBounds.second = y[n_y-1];
+	initiated = true;
+}
+
 double& gsl2DInterpolationWrapper::Val(unsigned int i, unsigned int j)
 {
 	assert(i < n_x && j < n_y);
@@ -381,7 +452,7 @@ void gsl2DInterpolationWrapper::Initialize()
 	initiated = true;
 }
 
-gsl2DInterpolationWrapper gsl2DInterpolationWrapper::Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > splines, const std::vector<double>& y)
+gsl2DInterpolationWrapper gsl2DInterpolationWrapper::Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> >& splines, const std::vector<double>& y)
 {
 	assert(splines.size() >= 2);
 	assert(y.size() == splines.size());
@@ -423,12 +494,14 @@ double& access(unsigned int i, unsigned int j, unsigned int k);			// no bounds c
 public:
 
 Interpolation3DWrapper(const double* _x,unsigned int n_x, const double* _y, unsigned int n_y, const double* z,unsigned int n_z);
+Interpolation3DWrapper(std::istream& in);
 Interpolation3DWrapper(const Interpolation3DWrapper& iw);
 ~Interpolation3DWrapper();
 Interpolation3DWrapper& operator =(const Interpolation3DWrapper& iw);
 double& Val(unsigned int i, unsigned int j, unsigned int k);			// with bounds checking
 double Eval(const double& _x, const double& _y, const double& _z);		// with bounds checking
 void print();
+void Save(std::ostream& o);
 
 };
 
@@ -496,30 +569,6 @@ double Interpolation3DWrapper::interp(const double& _x, const double& _y, const 
 	
 	return c0*(1.-z_d) + c1*z_d;
 }
-/*
-double Interpolation3DWrapper::extrap(const double& _x, const double& _y, const double& _z)
-{
-	int i = 0; int j = 0; int k = 0;
-	while(x[i] < _x) i++;
-	while(y[j] < _y) j++;
-	while(z[k] < _z) k++;
-	
-	const double x_d = (_x - x[i-1])/(x[i] - x[i-1]);
-	const double y_d = (_y - y[j-1])/(y[j] - y[j-1]);
-	const double z_d = (_z - z[k-1])/(z[k] - z[k-1]);
-	
-	// interpolate in x
-	const double c00 = access(i-1, j-1, k-1)*(1.-x_d) + access(i, j-1, k-1)*x_d;
-	const double c01 = access(i-1, j-1, k)*(1.-x_d) + access(i, j-1, k)*x_d;
-	const double c10 = access(i-1, j, k-1)*(1.-x_d) + access(i, j, k-1)*x_d;
-	const double c11 = access(i-1, j, k)*(1.-x_d) + access(i, j, k)*x_d;
-	
-	// interpolate in y
-	const double c0 = c00*(1.-y_d) + c10*y_d;
-	const double c1 = c01*(1.-y_d) + c11*y_d;
-	
-	return c0*(1.-z_d) + c1*z_d;
-}*/
 
 double Interpolation3DWrapper::Eval(const double& _x, const double& _y, const double& _z)
 {
@@ -551,7 +600,7 @@ Interpolation3DWrapper& Interpolation3DWrapper::operator =(const Interpolation3D
 	if(this == &iw) return *this;
 	Interpolation3DWrapper tmp(iw);
 	std::swap(x, tmp.x); std::swap(n_x, tmp.n_x);
-	std::swap(x, tmp.y); std::swap(n_y, tmp.n_y);
+	std::swap(y, tmp.y); std::swap(n_y, tmp.n_y);
 	std::swap(z, tmp.z); std::swap(n_z, tmp.n_z);
 	std::swap(f, tmp.f);	
 	return *this;
@@ -572,5 +621,53 @@ void Interpolation3DWrapper::print()
 	}
 	std::cout << std::endl;
 }
+
+void Interpolation3DWrapper::Save(std::ostream& o)
+{
+	o << n_x << '\t' << n_y << '\t' << n_z << '\n';
+	for(unsigned int i = 0; i < n_x; i++)
+		o << x[i] << (i < n_x-1 ? '\t' : '\n'); 
+	for(unsigned int i = 0; i < n_y; i++)
+		o << y[i] << (i < n_y-1 ? '\t' : '\n'); 
+	for(unsigned int i = 0; i < n_z; i++)
+		o << z[i] << (i < n_z-1 ? '\t' : '\n');
+	for(unsigned int i = 0; i < n_x; i++)
+	{
+		for(unsigned int j = 0; j < n_y; j++)
+		{
+			for(unsigned int k = 0; k < n_z; k++)
+			{
+				o << access(i,j,k) << ( (i<n_x-1)||(j<n_y-1)||(k<n_z-1) ? '\t' : '\n');
+			}
+		}
+	} 
+}
+Interpolation3DWrapper::Interpolation3DWrapper(std::istream& in) 
+{
+	in >> n_x >> n_y >> n_z;
+	assert(n_x > 1 && n_y > 1 && n_z > 1);
+	x = new double[n_x];
+	y = new double[n_y];
+	z = new double[n_z];
+	f = new double[n_x*n_y*n_z];
+	for(unsigned int i = 0; i < n_x; i++)
+		in >> x[i];
+	for(unsigned int i = 0; i < n_y; i++)
+		in >> y[i];
+	for(unsigned int i = 0; i < n_z; i++)
+		in >> z[i];
+	for(unsigned int i = 0; i < n_x; i++)
+	{
+		for(unsigned int j = 0; j < n_y; j++)
+		{
+			for(unsigned int k = 0; k < n_z; k++)
+			{
+				in >> access(i,j,k);
+			}
+		}
+	} 
+}
+
+
 
 #endif
