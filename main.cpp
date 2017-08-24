@@ -4,7 +4,7 @@
 #include "TFile.h"
 #include "TF1.h"
 #include "CanvasWrapper.h"
-//#include "dgrbFit.h"
+#include "dgrbFit.h"
 
 
 
@@ -19,49 +19,47 @@ void plotIntensities(std::vector<std::shared_ptr<AstrophysicalSource> >, std::st
 int main(int argc, char** argv)
 {
 	bool plot = true;
-	//TFile* plotFile;
-	//if(plot) plotFile = new TFile("plots.root", "RECREATE");
-	//TApplication* dummyApp;
-	//if(plot) dummyApp = new TApplication("dummy", &argc, argv);
 	
-	std::string data("/media/data/Documents/University/BachelorThesis/trafunc/");
+	std::string data("data/");
 	
 	// Load model values for the extra galactic background absorbtion
 	std::fstream dominguez(data + std::string("dominguez11.txt"),  std::fstream::in);
 	auto tau = LoadEBLAbsorbtionCoefficient(dominguez);
-	//tau->print();
 	
+	// Initialize CosmologyModel
 	auto CM = std::make_shared<LambdaCDM>(Bounds(1e-3, 100), 100);
-	std::cout << "Critical Density: " << CM->CriticalDensity << std::endl;
+	//std::cout << "Critical Density: " << CM->CriticalDensity << std::endl;
 	
 	// Load Linear Matter Power Spectrum
 	std::vector<std::fstream> PkFiles;
 	for(unsigned int i = 1; i <= 61; i++) 	// check file 62 and 63
-		PkFiles.push_back(std::fstream(data + std::string("honey_z") + std::to_string(i) + std::string("_pk.dat"), std::fstream::in));
+		PkFiles.push_back(std::fstream(data + "honey_z" + std::to_string(i) + "_pk.dat", std::fstream::in));
 	auto Plin = LoadLinearMatterPowerSpectrum(PkFiles);
 	//Plin->print();
 	
 	// Load N of log(x) for DM
-	auto dNdLogx = LoaddNdLogx();
+	std::fstream dmEnergySpectrum(data + "AtProduction_gammas.dat", std::fstream::in);
+	auto dNdLogx = LoaddNdLogx(dmEnergySpectrum);
+	//dNdLogx->print();
+	
 	
 	// Prepare the Halo Model
-	auto HM = std::make_shared<HaloModel>(CM, Plin, Bounds(1e-6 /* solar masses/h*/, 1e18), Bounds(1e-3, 50.), Bounds(1e-2, 1e3));
-	//HM->Init(50, 50,  100);
+	auto HM = std::make_shared<HaloModel>(CM, Plin, Bounds(1e-6 /* solar masses*/, 1e18), Bounds(1e-3, 50.), Bounds(1e-2, 1e3));
+	HM->Init(500, 500, 500, data + "HM.dat");
 	
 	//if(plot) plotHaloModel(HM, "");
+	return 0;
 	
-	//return 0;
-	
+	// Detector
 	auto DT = std::make_shared<FermiLAT>();
 	
 	// Prepare Benchmark class
-	
 	Benchmark B(CM, HM, DT, true, plot);
-	B.LuminosityBounds_global = Bounds(1e-3, 1e15);
-	B.zBounds_global = Bounds(1e-3, 10);  B.zGridLen = 20;
+	B.LuminosityBounds_global = Bounds(1e-10, 1e15); 	// in 1e48 ergs
+	B.zBounds_global = Bounds(1e-3, 10);  B.zGridLen = 30;
 	B.kBounds_global = Bounds(1e-2, 1e3); B.kGridLen = 200;
-	B.SBounds_global = Bounds(1e-20, 1e-4);  B.SGridLen = 16;
-	B.EBounds_global = Bounds(0.1_GeV, 900._GeV);  B.EGridLen = 20;
+	B.SBounds_global = Bounds(1e-20, 1e-4);  B.SGridLen = 20;
+	B.EBounds_global = Bounds(0.1_GeV, 900._GeV);  B.EGridLen = 40;
 	B.GammaGridLen = 13;
 	
 	B.IntensityBins = {Bounds(0.1_GeV ,.14_GeV), Bounds(0.14_GeV ,0.2_GeV), Bounds(0.2_GeV ,0.28_GeV), Bounds(0.28_GeV ,0.4_GeV),
@@ -82,19 +80,19 @@ int main(int argc, char** argv)
 	
 	
 	//AstrophysicalSources.push_back(std::make_shared<MAGN>(CM, tau));
-	AstrophysicalSources.push_back(std::make_shared<FSRQ>(CM, tau));
-	AstrophysicalSources.push_back(std::make_shared<LISP>(CM, tau));
-	AstrophysicalSources.push_back(std::make_shared<HSP>(CM, tau));
+	//AstrophysicalSources.push_back(std::make_shared<FSRQ>(CM, tau));
+	//AstrophysicalSources.push_back(std::make_shared<LISP>(CM, tau));
+	//AstrophysicalSources.push_back(std::make_shared<HSP>(CM, tau));
 	//AstrophysicalSources.push_back(std::make_shared<NGSFG>(CM, tau));
-	B.calculateIntensityAndAPSForAstrophysicalSources(AstrophysicalSources); 
+	//B.calculateIntensityAndAPSForAstrophysicalSources(AstrophysicalSources); 
 	
-	//dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, dNdLogx, 1e6, 1));
-	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 2e6, 1));
+	dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, dNdLogx, 1e6, 3e-26));
+	dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 10, 1.4e17));
 	
-	//B.calculateIntensityAndAutocorrelationForDM(dmModels);
+	B.calculateIntensityAndAutocorrelationForDM(dmModels);
 	
-	
-	if(plot) plotIntensities(AstrophysicalSources, "");
+	//if(plot) B.SavePlots("plots/");
+	//if(plot) plotIntensities(AstrophysicalSources, "plots/");
 	
 	
 	
@@ -103,7 +101,7 @@ int main(int argc, char** argv)
 	{
 		std::cout << "DM Intensity: " ;
 		for(unsigned int j = 0; j < dmModels.at(i)->Intensity.size(); j++)
-			std::cout << "[" << dmModels.at(i)->Intensity.at(j).first.first << ", " << dmModels.at(i)->Intensity.at(j).first.second << "]: " << dmModels.at(i)->Intensity.at(j).second << '\t';
+			std::cout<< dmModels.at(i)->Intensity.at(j) << '\t';
 		std::cout << std::endl;
 	}
 
@@ -124,8 +122,8 @@ void plotHaloModel(std::shared_ptr<HaloModel> HM, std::string path)
 		TF1 LHB(("LHB2z" + std::to_string(z[i])).c_str(), [HM, z, i] (double* args, double* params) { return pow(HM->LinearHaloBias(args[0]*h, z[i]),2.); },
 						1e10, 1e14, 0);
 		LHB.SetNpx(1e5);
-		auto g = new TGraph(&LHB);  g->SetLineColor(i+1);
-		LinearHaloBias.AddGraph(g, ("z = " + std::to_string(int(z[i]))).c_str(), "L");
+		auto g = new TGraph(&LHB);  //g->SetLineColor(i+1);
+		LinearHaloBias.AddGraph(g, ("z = " + std::to_string(int(z[i]))).c_str(), "L", true);
 	}
 	LinearHaloBias.Draw("A");	
 	LinearHaloBias.SetxLimits(1e10, 1e14);
@@ -147,10 +145,10 @@ void plotHaloModel(std::shared_ptr<HaloModel> HM, std::string path)
 		for(unsigned int j = 0; j < n; j++) HMF[j] = HM->HaloMassFunction(M[j]*h, z[i]);
 		auto HMFGraph = new TGraph(n, M, HMF);
 		//HMFGraph->SetTitle(("z = " + std::to_string(z[i])).c_str());  
-		HMFGraph->SetLineColor(i+1);
+		//HMFGraph->SetLineColor(i+1);
 		//HMFGraph->Draw((std::string(i ==0 ? "A" : "same") + "L").c_str());
 		//auto g = new TGraph(&HMF);  g->SetLineColor(i+1);
-		HMFCanvas.AddGraph(HMFGraph, ("z = " + std::to_string(int(z[i]))).c_str(), "L");
+		HMFCanvas.AddGraph(HMFGraph, ("z = " + std::to_string(int(z[i]))).c_str(), "L", true);
 	}
 	
 	HMFCanvas.Draw("A");	
@@ -201,9 +199,9 @@ void plotIntensities(std::vector<std::shared_ptr<AstrophysicalSource> > sources,
 	IntensityCanvas().SetLogx(1); IntensityCanvas().SetLogy(1); 
 	for(unsigned int i = 0; i < sources.size(); i++)
 	{
-		TGraph* g = new TGraph(sources[i]->MakeGraph());
-		g->SetLineColor(i+1);
-		IntensityCanvas.AddGraph(g, sources[i]->Name, "L");
+		//TGraph* g = new TGraph(sources[i]->MakeGraph());
+		//g->SetLineColor(i+1);
+		//IntensityCanvas.AddGraph(g, sources[i]->Name, "L", true);
 	}
 	IntensityCanvas.Draw("A");
 	IntensityCanvas().BuildLegend();
