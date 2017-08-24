@@ -33,7 +33,7 @@ public:
 	std::function<double(const double k, const double M, const double z)> SourceDensityFT = 0;	// The fourier transform of the Source Density, important for calculating cross sections with Galaxy Catalogues
 	
 	// The calculated results will be saved here
-	std::vector<std::pair<Bounds, double> > Intensity;		// A list of pairs (Energy Bin, Intensity)
+	std::vector<double > Intensity;		// A list of  Intensities, depending on EnergyBin
 	//std::function<double(const double E)> APS = 0;
 	
 	virtual ~DGRBSource() {}
