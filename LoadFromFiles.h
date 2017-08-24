@@ -8,6 +8,7 @@
 #include <string>
 #include <cassert>
 #include <vector>
+#include <sstream>
 
 #include "InterpolationWrapper.h"
 #include "EBLAbsorbtionCoefficient.h"
@@ -65,12 +66,40 @@ std::shared_ptr<LinearMatterPowerSpectrum> LoadLinearMatterPowerSpectrum(std::ve
 	return std::make_shared<LinearMatterPowerSpectrum>(spline);
 }
 
-std::shared_ptr<gsl1DInterpolationWrapper> LoaddNdLogx(/*std::fstream& file*/)
+std::shared_ptr<gsl2DInterpolationWrapper> LoaddNdLogx(std::fstream& file)
 {
-	std::vector<double> dLogx = { -5., -4., -3., -2., -1., 0.};
-	std::vector<double> dN = {0, 0.3, 9, 11, 1.8, 0.};
-	auto NofLogx = std::make_shared<gsl1DInterpolationWrapper>(dLogx.data(), dLogx.size(), dN.data(), gsl_interp_linear, 0);
+	std::string line;
+	std::stringstream ss;
+	double buf;
+	std::vector<double> mass, logx, bbar;
 	
+	std::getline(file, line);	// first line is text
+	
+	while(!file.eof())
+	{
+		std::getline(file, line);
+		if(line.empty()) continue;
+		ss = std::stringstream(line);
+		ss >> buf;	// first column is mass
+		if(mass.size() == 0) mass.push_back(buf);
+		else if(mass[mass.size()-1] != buf) mass.push_back(buf);
+		
+		ss >> buf; 	// second column is logx
+		if(logx.size() == 0) logx.push_back(buf);
+		else if(logx[logx.size()-1] < buf) logx.push_back(buf); // logx is in increasing order
+		
+		for(unsigned int i=0; i < 11; i++) ss >> buf;	// 11 uninteresting columns
+		ss >> buf; // b case
+		bbar.push_back(buf);		
+	}
+
+	auto NofLogx = std::make_shared<gsl2DInterpolationWrapper>(mass.data(), mass.size(), logx.data(), logx.size());
+	for(unsigned int i = 0; i < mass.size(); i++)
+	{
+		for(unsigned int j = 0; j < logx.size(); j++)
+				NofLogx->Val(i,j) = bbar.at(i*logx.size() + j);
+	}
+	NofLogx->Initialize();
 	return NofLogx;
 }
 
