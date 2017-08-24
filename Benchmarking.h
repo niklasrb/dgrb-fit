@@ -65,8 +65,9 @@ public:
 	~Benchmark();
 	
 	void calculateIntensityAndAPSForAstrophysicalSources(std::vector<std::shared_ptr<AstrophysicalSource> > sources);
-	
 	void calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> > DM);
+	
+	void SavePlots(std::string path);
 	
 private:
 	// For Astrophysical Sources
@@ -88,10 +89,16 @@ Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloMod
 {
 	if(m_plot)
 	{
-		dIdzCanvas = std::make_shared<Canvas>("dIdz", "dI/dz " );
+		dIdzCanvas = std::make_shared<Canvas>("dIdz", "dI/dz ", 2000, 2000);
 		(*dIdzCanvas)().SetLogx(1); (*dIdzCanvas)().SetLogy(1); 
 	//	//dNdSCanvas = std::make_shared<TCanvas>("dNdS", "dN/dS");
 	}
+}
+
+void Benchmark::SavePlots(std::string path)
+{
+	if(!m_plot) return;
+	(*dIdzCanvas)().SaveAs((path + "dIdz.jpg").c_str());
 }
 
 
