@@ -18,16 +18,16 @@ public:
 class FermiLAT : public Detector
 {
 public:
-	FermiLAT() : Detector(5e-8) 
+	FermiLAT() : Detector(5e-10) 
 	{
 		S_t_1 = {1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 6e-10, 7e-10, 8e-10, 9e-10, 10e-10};
 	}
 	
 	double DetectionEfficiency(const double S) override
 	{
-		if(S >= S_t_1GeV)
-		return 1.;
-	return pow(S / S_t_1GeV, 2.);
+		if(S >= 5e-8)
+			return 1.;
+		return pow(S / 5e-8, 2.);
 	}
 };
 
