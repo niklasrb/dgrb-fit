@@ -11,17 +11,25 @@ template<typename T>
 class AngularPowerSpectrum
 {
 protected:
-	T*** data;		// 3dim Matrix to hold the APS
+	T* data;		// 3dim Matrix to hold the APS
 	unsigned int nBin1, nBin2, nMul;	// dimension of this matrix
-	//std::vector<Bounds> EBins1, EBins2;
-	//std::vector<int> Multipole;
+	
+	T& access(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)
+	{
+		return data[EBin1 + nBin1 * (EBin2 + nBin2 * Multipole)];
+	}
 	
 public:
 	virtual T& operator ()(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)
 	{
 		assert(EBin1 < nBin1  && EBin2 < nBin2 && Multipole < nMul);
-		return data[EBin1][EBin2][Multipole];
+		return access(EBin1, EBin2, nMul);
 	}
+	
+	unsigned int Bin1Size() { return nBin1; }
+	unsigned int Bin2Size() { return nBin2; }
+	unsigned int MultipoleNumber() { return nMul; }
+	
 	
 	virtual T& at(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)
 	{
@@ -31,60 +39,18 @@ public:
 	/// Use this constructor if you dont't have the data yet, or don't want to deal with memory
 	AngularPowerSpectrum(unsigned int nBin1, unsigned int nBin2, unsigned int nMul) : nBin1(nBin1), nBin2(nBin2), nMul(nMul)
 	{
-		data = new T**[nBin1];
-		for(unsigned int i = 0; i < nBin1; i++)
-		{
-			data[i] = new T*[nBin2];
-			for(unsigned int j = 0; j < nBin2; j++)
-			{
-				data[i][j] = new T[nMul];
-			}
-		}
-	}
-	
-	/// Use this constructor if you already have the data in the correct format
-	AngularPowerSpectrum(unsigned int nBin1, unsigned int nBin2, unsigned int nMul, T*** APS) : AngularPowerSpectrum(nBin1, nBin2, nMul)
-	{
-		for(unsigned int i = 0; i < nBin1; i++)
-		{
-			for(unsigned int j = 0; j < nBin2; j++)
-			{
-				for(unsigned int k = 0; k < nMul; k++)
-				{
-					data[i][j][k] = APS[i][j][k];
-				}
-			}
-		}
+		data = new T[nBin1*nBin2*nMul];
 	}
 	
 	~AngularPowerSpectrum()
 	{
-		for(unsigned int i = 0; i < nBin1; i++)
-		{
-			for(unsigned int j = 0; j < nBin2; j++)
-			{
-				delete []data[i][j];
-			}
-			delete []data[i];
-		}
 		delete []data;
 	}
 	
-	AngularPowerSpectrum(const AngularPowerSpectrum& aps) : nBin1(aps.nBin1), nBin2(nBin2), nMul(nMul)
+	AngularPowerSpectrum(const AngularPowerSpectrum& aps) : nBin1(aps.nBin1), nBin2(aps.nBin2), nMul(aps.nMul)
 	{
-		data = new T**[nBin1];
-		for(unsigned int i = 0; i < nBin1; i++)
-		{
-			data[i] = new T*[nBin2];
-			for(unsigned int j = 0; j < nBin2; j++)
-			{
-				data[i][j] = new T[nMul];
-				for(unsigned int k = 0; k < nMul; k++)
-				{
-					data[i][j][k] = aps.data[i][j][k];
-				}
-			}
-		}
+		data = new T[nBin1*nBin2*nMul];
+		for(unsigned int i = 0; i < nBin1*nBin2*nMul; i++) data[i] = aps.data[i];
 	}
 	
 	AngularPowerSpectrum& operator =(const AngularPowerSpectrum& aps)
@@ -111,13 +77,13 @@ public:
 	T& operator ()(unsigned int EBin1, unsigned int EBin2)
 	{
 		assert(EBin1 < this->nBin1  && EBin2 < this->nBin2);
-		return this->data[EBin1][EBin2][0];
+		return this->access(EBin1, EBin2, 0);
 	}
 	
 	T& operator ()(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole) override
 	{
 		assert(EBin1 < this->nBin1  && EBin2 < this->nBin2);
-		return this->data[EBin1][EBin2][0];
+		return this->access(EBin1, EBin2, 0);
 	}
 	
 	T& at(unsigned int EBin1, unsigned int EBin2)
