@@ -4,6 +4,7 @@
 #include <cmath>
 #include <vector>
 #include <cassert>
+#include <iostream>
 
 #include "Constants.h"
 
@@ -23,7 +24,7 @@ public:
 	virtual T& operator ()(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)
 	{
 		assert(EBin1 < nBin1  && EBin2 < nBin2 && Multipole < nMul);
-		return access(EBin1, EBin2, nMul);
+		return access(EBin1, EBin2, Multipole);
 	}
 	
 	unsigned int Bin1Size() { return nBin1; }
@@ -44,7 +45,7 @@ public:
 	
 	~AngularPowerSpectrum()
 	{
-		delete []data;
+		delete [] data;
 	}
 	
 	AngularPowerSpectrum(const AngularPowerSpectrum& aps) : nBin1(aps.nBin1), nBin2(aps.nBin2), nMul(aps.nMul)
