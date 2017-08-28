@@ -13,6 +13,8 @@
 #include "InterpolationWrapper.h"
 #include "EBLAbsorbtionCoefficient.h"
 #include "LinearMatterPowerSpectrum.h"
+#include "AngularPowerSpectrum.h"
+
 
 std::shared_ptr<EBLAbsorbtionCoefficient> LoadEBLAbsorbtionCoefficient(std::fstream& file)
 {
@@ -103,4 +105,48 @@ std::shared_ptr<gsl2DInterpolationWrapper> LoaddNdLogx(std::fstream& file)
 	return NofLogx;
 }
 
+void LoadDGRB(std::fstream& file, std::vector<Bounds>& IntensityBins, std::vector<Measurement>& DGRB)
+{
+	std::string line; std::stringstream ss; 
+	Bounds b;  Measurement im;
+	while(!file.eof())
+	{
+		std::getline(file, line);
+		if(line.empty()) continue;
+		ss = std::stringstream(line);
+		ss >> b.first; ss >> b.second; IntensityBins.push_back(b);
+		ss >> im.first; ss >> im.second; DGRB.push_back(im);
+	}
+}
+
+std::shared_ptr<AngularPowerSpectrum<Measurement> > LoadAnistropy(std::string directory, int nBin, int nMul, std::vector<double>& Multipoles)
+{
+	std::string line; std::stringstream ss; double buf; Measurement m;
+	auto APS = std::make_shared<AngularPowerSpectrum<Measurement> >(nBin, nBin, nMul);
+	for( int i = 0; i < nBin; i++)
+	{
+		for( int j = i; j < nBin; j++)
+		{
+			std::fstream file(directory + "Cl_p7_2FGL_default_" + std::to_string(i+1) + "_" + std::to_string(j+1) + ".txt", std::fstream::in);
+			assert(file.is_open());
+			std::getline(file, line);	// ignore first line
+			int k = 0;
+			while(!file.eof())
+			{
+				std::getline(file, line);
+				if(line.empty()) continue;
+				ss = std::stringstream(line);
+				ss >> buf; ss >> buf; //ignore
+				ss >> buf; if(i ==1 && j == 1) Multipoles.push_back(buf);  
+				ss >> buf; m.first = buf; 	// value
+				ss >> buf; m.second = buf;	// error
+				//std::cout << i << ", " << j << ", " << k << ": " << m.first << " +- " << m.second << std::endl;
+				APS->at(i, j, k) = m;
+				if(i != j) APS->at(j, i, k) = m;	// symmetry
+				k += 1;
+			}
+		}
+	}
+	return APS;
+}
 #endif
