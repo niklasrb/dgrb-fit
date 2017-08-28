@@ -29,15 +29,9 @@ double *, double *, double *, void *), void *context);
 #include <string>
 #include <cstring>
 #include <vector>
+#include <iostream>
 #include "Constants.h"
 
-struct Parameter
-{
-	std::string name;
-	Bounds bounds;
-	bool periodicBoundaryConditions;
-	double lastValue;
-};
 
 struct MultiNestFitOptions
 {
@@ -61,37 +55,48 @@ struct MultiNestFitOptions
 	int maxiter;	// max no. of iteration / non-positive means infinte
 };
 
+struct MultiNestFitData
+{
+	//MultiNestFitDump(int nSamples, int nLivePoints, int nPar, double
+	//double** posteriorDistribution;
+	std::vector<double> lastParameters;
+	double logLike;
+	double maxLogLike;
+	double logZ;
+	double INSlogZ;
+	double logZerr;
+	int nLivePoints;
+	int nSamples;
+	 int nPar;
+};
+
 class MultiNestFit
 {
 private:
 	static void _loglike(double *Cube, int *n_dim, int *n_par, double *lnew, void *context);
 	static void _dumper(int *nSamples, int *nlive, int *nPar, double **physLive, double **posterior, double **paramConstr, double *maxLogLike, double *logZ, double *INSlogZ, double *logZerr, void *context);
 	
-	
-	
 protected:
-	MultiNestFitOptions options;
-	
-	//std::vector<Parameter> parameters;
 	unsigned int nParameters;
 	
 	virtual double loglike(double *Cube, int *npar) = 0;
-	virtual void dumper(int &nSamples, int &nlive, double** postdist, double** pLivePts, double &maxLogLike, double &logZ, double &INSlogZ, double &logZerr) = 0;
+	virtual void dumper(MultiNestFitData& data) = 0;
 
 public:
-	//std::string output = "";
+	MultiNestFitOptions options;
+	MultiNestFitData data;
 	
-	MultiNestFit();
+	MultiNestFit(std::string output);
 	//~MultiNestFit();
 	//MultiNestFit(const MultiNestFit* mnf) = delete;
 	//MultiNestFit& operator =(const MultiNestFit* mnf) = delete;
 	
-	void Run();
+	MultiNestFitData& Run();
 	
 	
 };
 
-MultiNestFit::MultiNestFit() 
+MultiNestFit::MultiNestFit( std::string output = "") 
 {	
 	options.IS = 1;					// do Nested Importance Sampling?
 	options.mmodal = 0;					// do mode separation?
@@ -104,7 +109,6 @@ MultiNestFit::MultiNestFit()
 	options.Ztol = -1E90;				// all the modes with logZ < Ztol are ignored
 	options.maxModes = 100;				// expected max no. of modes (used only for memory allocation)
 	
-	std::string root; 		// root for output files
 	options.seed = -1;					// random no. generator seed, if < 0 then take the seed from system clock
 	options.fb = 1;					// need feedback on standard output?
 	options.resume = 0;					// resume from a previous job?
@@ -114,6 +118,12 @@ MultiNestFit::MultiNestFit()
 	options.logZero = -1E90;				// points with loglike < logZero will be ignored by MultiNest
 	options.maxiter = 0;				// max no. of iterations, a non-positive value means infinity. MultiNest will terminate if either it 
 							// has done max no. of iterations or convergence criterion (defined through tol) has been satisfied
+							
+	if(!output.empty())
+	{
+		this->options.root = output;
+		this->options.outfile = 1;
+	}
 }
 
 
@@ -125,24 +135,23 @@ void MultiNestFit::_loglike(double *Cube, int *n_dim, int *n_par, double *lnew, 
 
 
 void MultiNestFit::_dumper(int *nSamples, int *nlive, int *nPar, double **physLive, double **posterior, double **paramConstr, double *maxLogLike, double *logZ, double *INSlogZ, double *logZerr, void *context)
-{
-	// Convert Arrays
-	double postdist[*nSamples][*nPar + 2];
-	for(int i = 0; i < *nPar + 2; i++ )
-		for( int j = 0; j < *nSamples; j++ )
-			postdist[j][i] = posterior[0][i * *nSamples + j];
+{	
+	MultiNestFit* mnf = ((MultiNestFit*)context);
+	for(int i = 0; i < *nPar; i++) mnf->data.lastParameters[i] = physLive[0][i * (*nlive)];
+	mnf->data.logLike = physLive[0][*nPar * (*nlive)];
 	
-	// last set of live points
-	// pLivePts will have nPar parameters in the first nPar columns & loglike value in the last column
+	mnf->data.maxLogLike = *maxLogLike;
+	mnf->data.logZ = *logZ;
+	mnf->data.INSlogZ = *INSlogZ;
+	mnf->data.logZerr = *logZerr;
+	mnf->data.nLivePoints = *nlive;
+	mnf->data.nSamples = *nSamples;
+	mnf->data.nPar = *nPar;
 	
-	double pLivePts[*nlive][*nPar + 1];
-	for( int i = 0; i < *nPar + 1; i++ )
-		for( int j = 0; j < *nlive; j++ )
-			pLivePts[j][i] = physLive[0][i * *nlive + j];
-	((MultiNestFit*)context)->dumper(*nSamples, *nlive,(double**) postdist, (double**) pLivePts, *maxLogLike, *logZ, *INSlogZ, *logZerr);
+	mnf->dumper(mnf->data);
 }
 
-void MultiNestFit::Run()
+MultiNestFitData& MultiNestFit::Run()
 {
 	char root[100];
 	std::strcpy(root, options.root.c_str());
@@ -155,6 +164,7 @@ void MultiNestFit::Run()
 	for(unsigned int i = 0; i < nParameters; i++) pWrap[0]=0; //pWrap[i] = (int)parameters[i].periodicBoundaryConditions;
 	void *context = this;				// not required by MultiNest, any additional information user wants to pass
 	
+	data.lastParameters.resize(nPar);
 	// calling MultiNest
 
 	//nested::run(IS, mmodal, ceff, nlive, tol, efr, ndims, nPar, nClsPar, maxModes, updInt, Ztol, root, seed, pWrap, fb, resume, outfile, initMPI,
@@ -163,6 +173,8 @@ void MultiNestFit::Run()
 
      NESTRUN(&options.IS, &options.mmodal, &options.ceff, &options.nlive, &options.tol, &options.efr, &ndims, &nPar, &nClsPar, &options.maxModes, &options.updInt, &options.Ztol,
         root, &options.seed, pWrap, &options.fb, &options.resume, &options.outfile, &options.initMPI, &options.logZero, &options.maxiter, &_loglike, &_dumper, context);
+     
+    return data;
 }
 
 #endif
