@@ -452,6 +452,8 @@ void gsl2DInterpolationWrapper::Initialize()
 	initiated = true;
 }
 
+/// combines many gsl2D interpolation objects to one
+/// first value is the gsl1D x axis, second value the given y axis
 gsl2DInterpolationWrapper gsl2DInterpolationWrapper::Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> >& splines, const std::vector<double>& y)
 {
 	assert(splines.size() >= 2);
