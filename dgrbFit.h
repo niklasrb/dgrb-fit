@@ -54,27 +54,34 @@ struct AstrophysicalSourceClass
 class IntensityFit : public MultiNestFit
 {
 protected:
-	std::vector< Bounds > IntensityBins;
-	std::vector< Measurement> IntensityMeasurement;
-	std::vector<std::shared_ptr<DGRBSource> > Sources;
+	std::vector<Bounds> IntensityBins;
+	std::vector<Measurement> IntensityMeasurement;
+	
+	std::vector<std::shared_ptr<AstrophysicalSource> > AstrophysicalSources;
+	std::vector<std::shared_ptr<DarkMatter> > dmModels;
 	std::vector<std::shared_ptr<AstrophysicalSourceClass> > AstrophysicalSourceClasses;
 	
 	
 	double IntensityChiSquared(double* parameters)
 	{
-		double chiSquared = 0;
+		double chiSquared = 0, intensity;
 		for(unsigned int i = 0; i < IntensityBins.size(); i++)
 		{
-			double intensity = 0;
-			for(unsigned int j =0; j < Sources.size(); j++)
+			intensity = 0;
+			for(unsigned int j =0; j < AstrophysicalSources.size(); j++)
 			{
-				intensity += pow(10, 2*parameters[j] - 1)*Sources[j]->Intensity[i];	// parameter is coefficient
+				intensity += pow(10, 2*parameters[j] - 1)*AstrophysicalSources[j]->Intensity[i];	// parameter is coefficient
 			}
-			int n = Sources.size();
+			int n = AstrophysicalSources.size();
+			for(unsigned int j = 0; j < dmModels.size(); j++)
+			{
+				intensity += pow(10, 10.*parameters[n+j] - 5.)*dmModels[j]->Intensity[i];
+			}
+			n += dmModels.size();
 			for(unsigned int j = 0; j < AstrophysicalSourceClasses.size(); j++)
 			{
 				auto asc = AstrophysicalSourceClasses[j];
-				intensity += pow(10, 2*parameters[n+j]-1)*asc->Intensity[i]->Eval(asc->parameterBounds.first + (asc->parameterBounds.second - asc->parameterBounds.first)*parameters[n+j+1]);	// first parameter is coefficient, second parameter is class parameter, i.e. E_cut
+				intensity += pow(10, 2*parameters[n+2*j]-1)*asc->Intensity[i]->Eval(asc->parameterBounds.first + (asc->parameterBounds.second - asc->parameterBounds.first)*parameters[n+2*j+1]);	// first parameter is coefficient, second parameter is class parameter, i.e. E_cut
 			}
 			chiSquared += pow( (IntensityMeasurement.at(i).first - intensity)/IntensityMeasurement.at(i).second, 2);
 		}
@@ -94,19 +101,22 @@ protected:
 	}
 
 public:
-	IntensityFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<std::shared_ptr<DGRBSource> >&Sources, std::vector<std::shared_ptr<AstrophysicalSourceClass> >& AstrophysicalSourceClasses, std::string output) 
-	: MultiNestFit(output) , IntensityBins(IntensityBins), IntensityMeasurement(IntensityMeasurement), Sources(Sources), AstrophysicalSourceClasses(AstrophysicalSourceClasses)
+	IntensityFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<std::shared_ptr<AstrophysicalSource> >& AstrophysicalSources, const std::vector<std::shared_ptr<DarkMatter> >& dmModels,
+					const std::vector<std::shared_ptr<AstrophysicalSourceClass> >& AstrophysicalSourceClasses, std::string output = "") 
+	: MultiNestFit(output) , IntensityBins(IntensityBins), IntensityMeasurement(IntensityMeasurement), AstrophysicalSources(AstrophysicalSources), dmModels(dmModels), AstrophysicalSourceClasses(AstrophysicalSourceClasses)
 	{
 		assert(IntensityBins.size() == IntensityMeasurement.size() && IntensityBins.size() > 0);
-		this->nParameters = Sources.size() + 2* AstrophysicalSourceClasses.size();
+		this->nParameters = AstrophysicalSources.size() + dmModels.size()  + 2* AstrophysicalSourceClasses.size();
 	}
 	
 	void printResults()
 	{
 		std::cout << "Intensity Fit: " << std::endl;
-		for(unsigned int i = 0; i < Sources.size(); i++)
-			std::cout << Sources[i]->Name << ": " << pow(10, 2*data.lastParameters[i]-1) << std::endl;
-		int n = Sources.size();
+		for(unsigned int i = 0; i < AstrophysicalSources.size(); i++)
+			std::cout << AstrophysicalSources[i]->Name << ": " << pow(10, 2*data.lastParameters[i]-1) << std::endl;
+		int n = AstrophysicalSources.size();
+		for(unsigned int i = 0; i < dmModels.size(); i++)
+			std::cout << dmModels[i]->Name << ": " << pow(10, 10.*data.lastParameters[i+n] -5.) << std::endl;
 		for(unsigned int i = 0; i < AstrophysicalSourceClasses.size(); i++)
 			std::cout << AstrophysicalSourceClasses[i]->Name << ": " << pow(10, 2*data.lastParameters[n+i]-1) << ",  " << AstrophysicalSourceClasses[i]->ScaleParameter(data.lastParameters[n+i+1]) << std::endl;
 	}
@@ -120,35 +130,42 @@ protected:
 	std::vector<Bounds> APSBins;
 	std::shared_ptr<AngularPowerSpectrum<Measurement> > APSMeasurement;
 	
-	std::vector<std::shared_ptr<AstrophysicalSource> > AstrophysicalSources;
-	std::vector<std::shared_ptr<DarkMatter> > DMModels;
-	
 	Bounds SBounds;
 	
 	double APSChiSquared(double* parameters)
 	{
-		double chiSquared = 0;
+		double chiSquared = 0, val;
 		//int nS = nPar; 	// position of S parameter
 		double S_t = SBounds.first + (SBounds.second - SBounds.first)*parameters[nParameters-1];	// S_t is last parameter
+		std::cout << "APSChiSquared:  S = " << S_t <<std::endl;
 		for(unsigned int i = 0; i < APSMeasurement->Bin1Size(); i++)
 		{
-			for(unsigned int j = 0; j < APSMeasurement->Bin2Size(); j++)
+			for(unsigned int j = 0; j <= i; j++)
 			{
-				double val = 0;
-				for(unsigned int k =0; k < AstrophysicalSources.size(); k++)
+				for(unsigned int k = 0; k < APSMeasurement->MultipoleNumber(); k++)
 				{
-					val += pow(10, (2*parameters[k] - 1))*AstrophysicalSources[k]->APS->at(i, j)->Eval(S_t);	// parameter is coefficient
+					val = 0;
+					for(unsigned int l =0; l < AstrophysicalSources.size(); l++)
+					{
+						val += pow(10, (2.*parameters[l] - 1.))*AstrophysicalSources[l]->APS->at(i, j)->Eval(S_t);	// parameter is coefficient
+					}
+					int n = AstrophysicalSources.size();
+					for(unsigned int l = 0; l < dmModels.size(); l++)
+					{
+						val += pow(10, 2.*(10.*parameters[n+l] -5.))* dmModels[l]->APS->at(i, j, k);		// this dependence is squared
+					}
+					n += dmModels.size();
+					for(unsigned int l = 0; l < AstrophysicalSourceClasses.size(); l++)
+					{
+						auto asc = AstrophysicalSourceClasses[l];
+						val += pow(10, (2.*parameters[n+2*l]-1.))*asc->APS->at(i, j)->Eval(S_t, asc->ScaleParameter(parameters[n+2*l+1]));	// first parameter is coefficient, second parameter is class parameter, i.e. E_cut
+					}
+					
+					chiSquared += pow( (APSMeasurement->at(i, j, k).first - val)/APSMeasurement->at(i, j, k).second, 2);
 				}
-				int n = AstrophysicalSources.size();
-				for(unsigned int k = 0; k < AstrophysicalSourceClasses.size(); k++)
-				{
-					auto asc = AstrophysicalSourceClasses[k];
-					val += pow(10, (2*parameters[n+k]-1))*asc->APS->at(i, j)->Eval(S_t, asc->ScaleParameter(parameters[n+k+1]));	// first parameter is coefficient, second parameter is class parameter, i.e. E_cut
-				}
-				chiSquared += pow( (APSMeasurement->at(i, j, 0).first - val)/APSMeasurement->at(i, j, 0).second, 2);
+			}
 		}
-		}
-		return chiSquared/APSBins.size();
+		return chiSquared/(pow(APSBins.size(),2)*APSMeasurement->MultipoleNumber()/2.);
 	}
 	
 	double loglike(double* Cube, int *npar) override
@@ -164,24 +181,19 @@ protected:
 	}
 	
 public:
-	IntensityAndAPSFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<Bounds>& APSBins, std::shared_ptr<AngularPowerSpectrum<Measurement> >& APSMeasurement,
-		const std::vector<std::shared_ptr<AstrophysicalSource> >& AstrophysicalSources, const std::vector<std::shared_ptr<DarkMatter> >& DMModels,  std::vector<std::shared_ptr<AstrophysicalSourceClass> >& AstrophysicalSourceClasses, std::string output = "")
-		: IntensityFit(IntensityBins, IntensityMeasurement, std::vector<std::shared_ptr<DGRBSource> >(), AstrophysicalSourceClasses, output) , APSBins(APSBins), APSMeasurement(APSMeasurement), AstrophysicalSources(AstrophysicalSources), DMModels(DMModels)
+	IntensityAndAPSFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<Bounds>& APSBins, const std::shared_ptr<AngularPowerSpectrum<Measurement> >& APSMeasurement,
+		const std::vector<std::shared_ptr<AstrophysicalSource> >& AstrophysicalSources, const std::vector<std::shared_ptr<DarkMatter> >& dmModels, const std::vector<std::shared_ptr<AstrophysicalSourceClass> >& AstrophysicalSourceClasses, Bounds SBounds, std::string output = "")
+		: IntensityFit(IntensityBins, IntensityMeasurement, AstrophysicalSources, dmModels, AstrophysicalSourceClasses, output) , APSBins(APSBins), APSMeasurement(APSMeasurement), SBounds(SBounds)
 		{
 			assert(APSBins.size() == APSMeasurement->Bin1Size()  && APSBins.size() == APSMeasurement->Bin2Size() && APSBins.size() >=2);
-			for(unsigned int i = 0; i < AstrophysicalSources.size(); i++) this->Sources.push_back(AstrophysicalSources[i]);
-			for(unsigned int i = 0; i < DMModels.size(); i++) this->Sources.push_back(DMModels[i]);
 			
-			this->nParameters = Sources.size() + 2* AstrophysicalSourceClasses.size() + 1; 
+			this->nParameters = AstrophysicalSources.size() + dmModels.size() + 2* AstrophysicalSourceClasses.size() + 1; 
+			options.nlive = 100;
 		} 
+	
 	void printResults()
 	{
-		std::cout << "Intensity and APS Fit: " << std::endl;
-		for(unsigned int i = 0; i < Sources.size(); i++)
-			std::cout << Sources[i]->Name << ": " << pow(10, 2*data.lastParameters[i]-1) << std::endl;
-		int n = Sources.size();
-		for(unsigned int i = 0; i < AstrophysicalSourceClasses.size(); i++)
-			std::cout << AstrophysicalSourceClasses[i]->Name << ": " << pow(10, 2*data.lastParameters[n+i]-1) << ",  " << AstrophysicalSourceClasses[i]->ScaleParameter(data.lastParameters[n+i+1]) << std::endl;
+		IntensityFit::printResults();
 		std::cout << "S_t = " << SBounds.first + (SBounds.second - SBounds.first)*data.lastParameters[nParameters-1] << std::endl;
 	}
 	
