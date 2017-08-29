@@ -14,6 +14,7 @@
 #include "TF1.h"
 #include "TF2.h"
 #include "TF3.h"
+#include "TFile.h"
 #include "TSpline.h"
 #include "TCanvas.h"
 #include "TFile.h"
@@ -39,8 +40,11 @@ class Benchmark
 protected:
 	bool m_log;
 	bool m_plot;
-	std::shared_ptr<Canvas> dIdzCanvas;
-	//std::shared_ptr<TCanvas> dNdSCanvas;
+
+	std::shared_ptr<TFile> dIdzFile;
+	std::shared_ptr<TFile> NofSFile;
+	std::shared_ptr<TFile> _3DPSFile;
+	std::shared_ptr<TFile> IntensityFile;
 	
 public:
 	Bounds LuminosityBounds_global;
@@ -61,44 +65,36 @@ private:
 	
 public:	
 	
-	Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::shared_ptr<Detector> DT, bool log, bool plot) ;
+	Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::shared_ptr<Detector> DT, bool log, bool plot, std::string) ;
 	~Benchmark();
 	
 	void calculateIntensityAndAPSForAstrophysicalSources(std::vector<std::shared_ptr<AstrophysicalSource> > sources);
-	void calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> > DM);
-	
-	void SavePlots(std::string path);
+	void calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> >& DM, const std::vector<double>& Multipoles);
 	
 private:
 	// For Astrophysical Sources
 	void calculateIntensityAndAPS(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& SGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
-	std::shared_ptr<gsl2DInterpolationWrapper> ObtainSoverLMapping(AstrophysicalSource* source, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
+	std::shared_ptr<gsl2DInterpolationWrapper> ObtainSoverLMapping(AstrophysicalSource* source, Bounds EnergyBin, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtainEffectiveEnergySpectrum(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
-	std::shared_ptr<gsl2DInterpolationWrapper> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<Bounds>& EGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline);
-	void plotIntermediates(AstrophysicalSource* source, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline);
+	std::shared_ptr<gsl2DInterpolationWrapper> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<Bounds>& EGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline);
 	
 	// For DM
-	void calculateAPSForDM(std::shared_ptr<DarkMatter> DM, const std::vector<Bounds>& EBins, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<int>& Multipoles);
+	void calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::vector<Bounds>& EBins, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<double>& Multipoles);
 	void calculateIntensityForDM(std::shared_ptr<DarkMatter> DM, const std::vector<Bounds>& EBins);
 };
 
 
-Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::shared_ptr<Detector> DT, bool log = true, bool plot = false)  
+Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::shared_ptr<Detector> DT, bool log = true, bool plot = false, std::string dir = "")  
 												: m_log(log), m_plot(plot), CM(CM), HM(HM), DT(DT)
 {
 	if(m_plot)
 	{
-		dIdzCanvas = std::make_shared<Canvas>("dIdz", "dI/dz ", 2000, 2000);
-		(*dIdzCanvas)().SetLogx(1); (*dIdzCanvas)().SetLogy(1); 
-	//	//dNdSCanvas = std::make_shared<TCanvas>("dNdS", "dN/dS");
+		dIdzFile = std::make_shared<TFile>((dir + "dIdz.root").c_str(), "RECREATE");
+		NofSFile = std::make_shared<TFile>((dir + "NofS.root").c_str(), "RECREATE");
+		_3DPSFile = std::make_shared<TFile>((dir + "3DPS.root").c_str(), "RECREATE");
+		IntensityFile = std::make_shared<TFile>((dir + "Intensity.root").c_str(), "RECREATE");
 	}
-}
-
-void Benchmark::SavePlots(std::string path)
-{
-	if(!m_plot) return;
-	(*dIdzCanvas)().SaveAs((path + "dIdz.jpg").c_str());
 }
 
 
