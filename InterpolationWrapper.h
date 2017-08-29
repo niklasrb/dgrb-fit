@@ -79,6 +79,18 @@ public:
 		return res;
 	}
 	
+	// Allows addition if they have the same grid
+	friend gsl1DInterpolationWrapper operator+(const gsl1DInterpolationWrapper& iw1, const gsl1DInterpolationWrapper& iw2)
+	{
+		assert(iw1.n == iw2.n);
+		for(unsigned int i = 0; i < iw1.n; i++) assert(iw1.x[i] == iw2.x[i]);
+		double* y = new double[iw1.n];
+		for(unsigned int i = 0; i < iw1.n; i++) y[i] = iw1.y[i] + iw2.y[i];
+		gsl1DInterpolationWrapper res(iw1.x, iw1.n, y, iw1.T, iw1.outOfBounds*iw2.outOfBounds);
+		delete []y;
+		return res;
+	}
+	
 	Bounds get_xBounds() { return xBounds; }
 };
 
