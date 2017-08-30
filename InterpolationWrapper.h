@@ -260,7 +260,8 @@ void gsl1DInterpolationWrapper::print()
 void gsl1DInterpolationWrapper::Save(std::ostream& o)
 {
 	o << n << std::endl;
-	for(unsigned int i = 0; i < n; i++) o << x[i] << '\t' << y[i] << std::endl;
+	for(unsigned int i = 0; i < n; i++) o << x[i] << (i < n-1 ? '\t': '\n');
+	for(unsigned int i = 0; i < n; i++) o << y[i] << (i < n-1 ? '\t': '\n');
 }
 
 gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(std::istream& in, const gsl_interp_type* T= gsl_interp_linear, double outOfBounds = NAN) : T(T), outOfBounds(outOfBounds)
@@ -269,7 +270,8 @@ gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(std::istream& in, const gsl
 	x = new double[n];  y = new double[n];
 	spline = gsl_interp_alloc(T, n);
 	x_acc = gsl_interp_accel_alloc();
-	for(unsigned int i = 0; i < n; i++) in >> x[i] >> y[i]; 
+	for(unsigned int i = 0; i < n; i++) in >> x[i];
+	for(unsigned int i = 0; i < n; i++) in >> y[i];
 	gsl_interp_init(spline, x, y, n);
 	xBounds.first = x[0];  xBounds.second = x[n-1];	
 }
