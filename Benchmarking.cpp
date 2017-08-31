@@ -443,6 +443,17 @@ void Benchmark::calculateIntensityForDM(std::shared_ptr<DarkMatter> DM, const st
 		DM->Intensity.push_back( wf->Integral(EBins.at(i).first, EBins.at(i).second, log(zBounds_global.first), log(zBounds_global.second), 1e-4));
 	}
 	delete wf;
+	
+	if(m_plot)	// plot Intensity
+	{
+		std::vector<double> IntBinMid; IntBinMid.resize(EBins.size());
+		std::vector<double> ScaledInt; ScaledInt.resize(EBins.size());
+		for(unsigned int i = 0; i < IntBinMid.size(); i++) IntBinMid[i] = (EBins[i].first + EBins[i].second)/2.;
+		for(unsigned int j = 0; j < ScaledInt.size(); j++) ScaledInt[j] = DM->Intensity[j]*pow(IntBinMid[j], 2.)/(EBins[j].second - EBins[j].first); 
+		TGraph* g = new TGraph(IntensityBins.size(), IntBinMid.data(), ScaledInt.data()); g->SetName(DM->Name.c_str());
+		IntensityFile->cd();
+		g->Write();
+	}
 }
 
 void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::vector<Bounds>& EBins, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<double>& Multipoles)
@@ -451,7 +462,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 	TF1* P1HaloIntegrand = new TF1((std::string("The Integrand dn/dm * sourcedensityFT^2 for the 1 Halo term for ") + DM->Name).c_str(),
 									[DM, this] (double* args, double* params) // args[0]: log(M)  params[0]: k  params[1]: z
 									{ //std::cout << "P1: " << exp(args[0]) << '\t' << params[0] << '\t' << HM->HaloMassFunction(exp(args[0]), params[1]) << '\t' << DM->SourceDensityFT(params[0], exp(args[0]), params[1]) << std::endl;
-										return exp(args[0])*HM->HaloMassFunction(exp(args[0]), params[1]) * pow(DM->SourceDensityFT(params[0], exp(args[0]), params[1]), 2); },
+										return exp(args[0])*HM->HaloMassFunction(exp(args[0]), params[1]) * pow(DM->SourceDensityFT(params[0], exp(args[0]), params[1]), 2.); },
 									log(HM->MBounds.first), log(HM->MBounds.second), 2);
 	
 	TF1* P2HaloIntegrand = new TF1((std::string("The Integrand dn/dm * LinearHaloBias *sourcedensityFT for the 2 Halo term for ") + DM->Name).c_str(),
@@ -462,14 +473,16 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 	
 	auto _3DPowerSpectrumSpline = std::make_shared<gsl2DInterpolationWrapper>(kGrid.data(), kGrid.size(), zGrid.data(), zGrid.size());
 	
+	double p1, p2;
 	for(unsigned int i = 0; i < kGrid.size(); i++)
 	{
 		for(unsigned int j = 0; j < zGrid.size(); j++)
 		{
 			P1HaloIntegrand->SetParameters(kGrid.at(i), zGrid.at(j));
 			P2HaloIntegrand->SetParameters(kGrid.at(i), zGrid.at(j));
-			_3DPowerSpectrumSpline->Val(i, j) = P1HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-4)   
-										+ pow(P2HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-4), 2)*(*(HM->Plin))(kGrid.at(i), zGrid.at(j));
+			p1 = P1HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-3);
+			p2 = P2HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-3);
+			_3DPowerSpectrumSpline->Val(i, j) =  p1 + pow(p2, 2)*(*(HM->Plin))(kGrid.at(i), zGrid.at(j));
 			
 			if(m_log) std::cout << '(' << i << ", " << j << "): " << _3DPowerSpectrumSpline->Val(i, j) << std::endl;
 		}
@@ -481,7 +494,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 	if(m_plot)
 	{
 		std::vector<double> PS; PS.resize(kGrid.size());
-		for(unsigned int i = 0; i < kGrid.size(); i++) PS[i] = _3DPowerSpectrumSpline->Eval(kGrid[i], 1);
+		for(unsigned int i = 0; i < kGrid.size(); i++) PS[i] = _3DPowerSpectrumSpline->Eval(kGrid[i]*h, 1);
 		auto g = new TGraph(kGrid.size(), kGrid.data(), PS.data()); g->SetName(DM->Name.c_str());
 		_3DPSFile->cd();
 		g->Write();
@@ -505,7 +518,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 			{
 				APSCrossIntegrand->SetParameter(0, Multipoles.at(k));
 				DM->APS->at(i, j, k) = APSCrossIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second,
-															EBins[j].first, EBins[j].second, 1e-4);
+															EBins[j].first, EBins[j].second, 1e-3);
 				DM->APS->at(j, i, k) = DM->APS->at(i, j, k);
 				if(m_log) std::cout << "( " << i << ", " << j << ", " << k << "): " << DM->APS->at(i,j,k) << std::endl;
 			}
@@ -525,7 +538,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 		for(unsigned int k = 0; k < Multipoles.size(); k++)
 		{
 			APSAutoIntegrand->SetParameter(0, Multipoles[k]);
-			DM->APS->at(i, i, k) = APSAutoIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second, 1e-4);
+			DM->APS->at(i, i, k) = APSAutoIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second, 1e-3);
 			if(m_log) std::cout << "( " << i << ", " << k << "): " << DM->APS->at(i,i,k) << std::endl;
 		}
 	}
