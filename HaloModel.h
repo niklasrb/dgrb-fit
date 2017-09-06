@@ -44,6 +44,7 @@ protected:
 	double ConcentrationParameter(const double M);		// c_vir or c_200
 	double SubhaloBoostFactor(const double M);			// b_sub
 	double NFWHaloDensityProfile(const double r, const double M, const double z);	// the Navarro Frenk White profile
+public:
 	double DMDensity(const double z);					// The dark matter density at a specific redshift
 	
 	// These routines calculate the std::functions defined below
@@ -85,7 +86,7 @@ HaloModel::HaloModel(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<LinearM
 
 void HaloModel::Init(unsigned int MLen, unsigned int zLen, unsigned int kLen, std::string file= "")
 {
-	assert(MLen >=1);	assert(zLen >=1);   assert(kLen >= 1);
+	assert(MLen >=2);	assert(zLen >=2);   assert(kLen >= 2);
 	std::fstream f;
 	if(!file.empty()) f = std::fstream(file, f.out);
 	else f.setstate(std::ios_base::failbit);
@@ -112,7 +113,7 @@ void HaloModel::Init(unsigned int MLen, unsigned int zLen, unsigned int kLen, st
 	CalculateLinearHaloBias(M, z, f);
 	CalculateHaloMassFunction(M, z, f);
 	CalculateNFWHaloDensityProfileFT(k, M, z, f);
-	//CalculateSourceDensitySubhaloBoostFT(M, k, z, f);
+	CalculateSourceDensitySubhaloBoostFT(M, k, z, f);
 	CalculateClumpingFactor(M, z, f);
 }
 
@@ -217,7 +218,7 @@ void HaloModel::CalculateHaloMassFunction(const std::vector<double>& M, const st
 		for(unsigned int j = 0; j < M.size(); j++) 
 		{
 			//std::cout << pow(CriticalOverdensity/Sigma.at(j), 2.) << '\t' << f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) << '\t' << std::abs(LogSigmaSpline->Derivative(log(M.at(j)))) << std::endl;
-			HMFSpline->Val(j, i) = CM->CriticalDensity*CM->O_m/M.at(j) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogSigmaSpline->Derivative(logM.at(j)));
+			HMFSpline->Val(j, i) = CM->CriticalDensity*CM->O_m/pow(M.at(j), 2.) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogSigmaSpline->Derivative(logM.at(j)));
 		}
 		
 		delete LogSigmaSpline;
@@ -321,14 +322,14 @@ void HaloModel::CalculateNFWHaloDensityProfileFT(const std::vector<double>& k, c
 			r_s = r_vir/c_z;
 			for(unsigned int i = 0; i < k.size(); i++)
 			{
-				std::cout << i << ", " << j << ", " << l << ": k*r_s = " << k.at(i)*r_s  <<std::endl;
-				NFWHDPFTSpline->Val( i, j, l) = /*M.at(j)*/(log(1.+c_z) - c_z/(1.+c_z))/(k.at(i)*r_s*DMDensity(z.at(l))) * FTIntSpline->Eval(k.at(i)*r_s, c_z) ;
+				//std::cout << i << ", " << j << ", " << l << ": k*r_s = " << k.at(i)*r_s  <<std::endl;
+				NFWHDPFTSpline->Val( i, j, l) = M.at(j)*(log(1.+c_z) - c_z/(1.+c_z))/(k.at(i)*r_s*DMDensity(z.at(l))) * FTIntSpline->Eval(k.at(i)*r_s, c_z) ;
 			}
 		}
 	}
 	if(out.good()) NFWHDPFTSpline->Save(out);
 	NFWHaloDensityProfileFT = [NFWHDPFTSpline] (const double k, const double M, const double z)
-												{ return NFWHDPFTSpline->Eval(k, M, z); } ; 
+												{ /*std::cout << "NFWHDPFTSpline: " << k << ", " << M << ", " << z << std::endl;*/ return NFWHDPFTSpline->Eval(k, M, z); } ; 
 	/*
 	Bounds rBounds; rBounds.first = pow(3*M[0] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.);
 	rBounds.second = pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.);
@@ -361,7 +362,7 @@ void HaloModel::CalculateNFWHaloDensityProfileFT(const std::vector<double>& k, c
 		}
 	}
 	gsl_integration_cquad_workspace_free(cquadws);
-	
+	if(out.good()) NFWHDPFTSpline->Save(out);
 	NFWHaloDensityProfileFT = [NFWHDPFTSpline] (const double k, const double M, const double z)
 												{ return NFWHDPFTSpline->Eval(k, M, z); } ;  */
 }
@@ -373,7 +374,6 @@ double HaloModel::NFWHaloDensityProfile(const double r, const double M, const do
 	const double r_vir = pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.)*1._Mpc;
 	const double r_s = r_vir/c;
 	const double rho_s = M/(4*M_PI*pow(r_s,3)) * (log(1.+c) - c/(1.+c));
-	//std::cout << "NFW: " << r << '\t' << M << '\t' << c << '\t' << r_vir << '\t' << r_s << '\t' << rho_s << '\t' << rho_s*r_s/(r*pow(1.+ r/r_s, 2)) << std::endl;
 	return rho_s*r_s/(r*pow(1.+ r/r_s, 2));
 }
 
@@ -506,7 +506,7 @@ void HaloModel::CalculateClumpingFactor(const std::vector<double>& M, const std:
 											[NFWsqIntegrated, this] (double* args, double* params) // args[0]: log(M)  params[0]: z
 											{	//double NFW = NFWsqIntegrated->Eval(exp(args[0]), params[0]);
 												//std::cout << exp(args[0]) << '\t' << HaloMassFunction(exp(args[0]), params[0]) << '\t' << (1.+ SubhaloBoostFactor(exp(args[0]))) << '\t' << NFW << std::endl;
-												return exp(args[0])*HaloMassFunction(exp(args[0]), params[0])*(1.+ SubhaloBoostFactor(exp(args[0])))*NFWsqIntegrated->Eval(exp(args[0]), params[0]); }, // Integrate to r_vir
+												return exp(args[0])*HaloMassFunction(exp(args[0]), params[0])*(1.+ SubhaloBoostFactor(exp(args[0])))*NFWsqIntegrated->Eval(exp(args[0]), params[0]); }, 
 												log(MBounds.first), log(MBounds.second), 1);
 	std::vector<double> CF;  CF.resize(z.size());
 	for(unsigned int i = 0; i < z.size(); i++)
@@ -552,32 +552,70 @@ void HaloModel::Plot(std::string file)
 	auto rootFile = new TFile((file).c_str(), "RECREATE", "HaloModelPlots");
 	
 	/// Linear Halo Bias
-	double* z = new double[4]; z[0]= 0; z[1] = 1; z[2] = 2; z[3] = 3;	
-	for(unsigned int i = 0; i < 4; i++)
 	{
-		TF1 LHB(("LHB2z" + std::to_string(z[i])).c_str(), [this, z, i] (double* args, double* params) { return pow(LinearHaloBias(args[0]*h, z[i]),2.); },
-						1e10, 1e14, 0);
-		LHB.SetNpx(1e4);
-		auto g = new TGraph(&LHB);  g->SetName(("LHB" + std::to_string(z[i])).c_str());
-		g->Write();
+		double* z = new double[4]; z[0]= 0; z[1] = 1; z[2] = 2; z[3] = 3;	
+		for(unsigned int i = 0; i < 4; i++)
+		{
+			TF1 LHB(("LHB2z" + std::to_string(z[i])).c_str(), [this, z, i] (double* args, double* params) { return pow(LinearHaloBias(args[0]*h, z[i]),2.); },
+							1e10, 1e14, 0);
+			LHB.SetNpx(1e4);
+			auto g = new TGraph(&LHB);  g->SetName(("LHB" + std::to_string(z[i])).c_str());
+			g->Write();
+		}
+		delete []z;
 	}
-	
 	/// Halo Mass Function
-	unsigned int n = 30;  double M_min = 1e4;  double M_max = 1e12;
-	double* M = new double[n];
-	for(unsigned int i =0; i < n; i++) M[i] = exp( log(M_min) + i*(log(M_max) - log(M_min))/(n-1.));
-	double* HMF = new double[n];
-	z[0] = 0; z[1] =  10; z[2] = 20; z[3] =  30;
-	for(unsigned int i = 0; i < 4; i++)
 	{
-		for(unsigned int j = 0; j < n; j++) HMF[j] = HaloMassFunction(M[j]*h, z[i]);
-		auto g = new TGraph(n, M, HMF); g->SetName(("HMF" + std::to_string(z[i])).c_str());
-		g->Write();
+		unsigned int n = 30;  double M_min = 1e-6;  double M_max = 1e12;
+		double* M = new double[n];
+		for(unsigned int i =0; i < n; i++) M[i] = exp( log(M_min) + i*(log(M_max) - log(M_min))/(n-1.));
+		double* HMF = new double[n];
+		std::vector<int> z = {0, 10, 20, 30};
+		for(unsigned int i = 0; i < z.size(); i++)
+		{
+			for(unsigned int j = 0; j < n; j++) HMF[j] = HaloMassFunction(M[j]*h, z[i]);
+			auto g = new TGraph(n, M, HMF); g->SetName(("HMF" + std::to_string(z[i])).c_str());
+			g->Write();
+		}
+		
+		delete []M; delete []HMF;
 	}
-	
-	delete []M; delete []HMF;
-	delete []z;
-	
+	/// NFWHaloDensityProfileFT
+	{
+		std::vector<double> M = {1e-5_M_solar, 1._M_solar, 1e10_M_solar};
+		std::vector<int> z = {1, 4};
+		std::vector<double> k;  k.resize(100); for(unsigned int i = 0; i < k.size(); i++) k[i] = exp(log(kBounds.first) + i*(log(kBounds.second) - log(kBounds.first))/(k.size()-1));
+		std::vector<double> NFWHDPFT; NFWHDPFT.resize(k.size());
+		for(unsigned int i = 0; i < M.size(); i++)
+		{
+			for(unsigned int j = 0; j < z.size(); j++)
+			{
+				//std::cout << i << " " << j << std::endl;
+				for(unsigned int l = 0; l < k.size(); l++) NFWHDPFT[l] = NFWHaloDensityProfileFT(k.at(l), M.at(i), z.at(j));
+				auto g = new TGraph(k.size(), k.data(), NFWHDPFT.data());
+				g->SetName(("NFWHDPFT_" + std::to_string(M.at(i)) + "_" + std::to_string(z.at(j))).c_str());
+				g->Write();
+			}
+		}
+	}
+	/// SourceDensitySubhaloBoostFT
+	{
+		std::vector<double> M = {1e-5_M_solar, 1._M_solar, 1e10_M_solar};
+		std::vector<int> z = {1, 4};
+		std::vector<double> k;  k.resize(100); for(unsigned int i = 0; i < k.size(); i++) k[i] = exp(log(kBounds.first) + i*(log(kBounds.second) - log(kBounds.first))/(k.size()-1));
+		std::vector<double> NFWHDPFT; NFWHDPFT.resize(k.size());
+		for(unsigned int i = 0; i < M.size(); i++)
+		{
+			for(unsigned int j = 0; j < z.size(); j++)
+			{
+				//std::cout << i << " " << j << std::endl;
+				for(unsigned int l = 0; l < k.size(); l++) NFWHDPFT[l] = SourceDensitySubhaloBoostFT(k.at(l), M.at(i), z.at(j));
+				auto g = new TGraph(k.size(), k.data(), NFWHDPFT.data());
+				g->SetName(("SDSBFT_" + std::to_string(M.at(i)) + "_" + std::to_string(z.at(j))).c_str());
+				g->Write();
+			}
+		}
+	}
 	/// Integrated Halo Mass Function  
 	/*Canvas IHMFCanvas("nCanvas", "Integrated Halo Mass Function", 1000, 1000);
 	IHMFCanvas().SetLogy(1);
