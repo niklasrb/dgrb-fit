@@ -65,7 +65,7 @@ public:
 	// Saves data in the stream
 	void Save(std::ostream& o);
 	
-	TGraph MakeGraph();
+	TGraph* MakeGraph();
 	
 	// Allows multiplication if they have the same grid!
 	friend gsl1DInterpolationWrapper operator*(const gsl1DInterpolationWrapper& iw1, const gsl1DInterpolationWrapper& iw2)
@@ -87,6 +87,15 @@ public:
 		double* y = new double[iw1.n];
 		for(unsigned int i = 0; i < iw1.n; i++) y[i] = iw1.y[i] + iw2.y[i];
 		gsl1DInterpolationWrapper res(iw1.x, iw1.n, y, iw1.T, iw1.outOfBounds*iw2.outOfBounds);
+		delete []y;
+		return res;
+	}
+	
+	friend gsl1DInterpolationWrapper sqrt(const gsl1DInterpolationWrapper& iw)
+	{
+		double* y = new double[iw.n];
+		for(unsigned int i = 0; i < iw.n; i++) y[i] = sqrt(iw.y[i]);
+		gsl1DInterpolationWrapper res(iw.x, iw.n, y, iw.T, sqrt(iw.outOfBounds));
 		delete []y;
 		return res;
 	}
@@ -150,6 +159,13 @@ public:
 	
 	Bounds get_xBounds() { return xBounds; }
 	Bounds get_yBounds() { return yBounds; }
+	
+	// Plots along the x axis at point y
+	TGraph* MakeGraphAty(const double y);
+	
+	// Plots along the x axis at point y
+	TGraph* MakeGraphAtx(const double x);
+	
 	
 	static gsl2DInterpolationWrapper Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > &splines, const std::vector<double>& y);
 };
@@ -277,9 +293,9 @@ gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(std::istream& in, const gsl
 }
 
 
-TGraph gsl1DInterpolationWrapper::MakeGraph()
+TGraph* gsl1DInterpolationWrapper::MakeGraph()
 {
-	return TGraph(n, x, y);
+	return new TGraph(n, x, y);
 }
 
 
@@ -464,6 +480,24 @@ void gsl2DInterpolationWrapper::Initialize()
 	if(initiated) return;
 	gsl_interp2d_init(spline, x, y, z, n_x, n_y);
 	initiated = true;
+}
+
+TGraph* gsl2DInterpolationWrapper::MakeGraphAty(const double y)
+{
+	double* p = new double[n_x];
+	for(unsigned int i = 0; i < n_x; i++) p[i] = this->Eval(x[i], y);
+	auto g = new TGraph(n_x, x, p);
+	delete []p;
+	return g;
+}
+
+TGraph* gsl2DInterpolationWrapper::MakeGraphAtx(const double x)
+{
+	double* p = new double[n_y];
+	for(unsigned int i = 0; i < n_y; i++) p[i] = this->Eval(x, y[i]);
+	auto g = new TGraph(n_y, y, p);
+	delete []p;
+	return g;
 }
 
 /// combines many gsl2D interpolation objects to one
