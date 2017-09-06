@@ -75,9 +75,9 @@ private:
 	// For Astrophysical Sources
 	void calculateIntensityAndAPS(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& SGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
 	std::shared_ptr<gsl2DInterpolationWrapper> ObtainSoverLMapping(AstrophysicalSource* source, Bounds EnergyBin, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
-	std::shared_ptr<gsl2DInterpolationWrapper> ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
-	std::shared_ptr<gsl2DInterpolationWrapper> ObtainEffectiveEnergySpectrum(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline);
-	std::shared_ptr<gsl2DInterpolationWrapper> ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<Bounds>& EGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline);
+	std::shared_ptr<gsl2DInterpolationWrapper> ObtaindNoverdS(AstrophysicalSource* source, Bounds EnergyBin, const std::vector<double>& zGrid, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid);
+	std::shared_ptr<gsl2DInterpolationWrapper> ObtainEffectiveEnergySpectrum(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid);
+	std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<Bounds>& EBins, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline);
 	
 	// For DM
 	void calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::vector<Bounds>& EBins, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<double>& Multipoles);

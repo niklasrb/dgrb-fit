@@ -30,7 +30,7 @@ void Benchmark::calculateIntensityAndAPSForAstrophysicalSources(std::vector<std:
 		{
 			GammaGrid.resize(2);	// we need this for gsl to interpolate in 2D
 			GammaGrid[0] = source->GammaBounds.first;
-			GammaGrid[1] = GammaGrid[0]+1e-10; 	// arbitrary higher value
+			GammaGrid[1] = source->GammaBounds.first+1; 	// arbitrary higher value
 		}
 		else
 		{
@@ -49,40 +49,37 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 {
 	assert(source != NULL);
 	
-	//std::vector<double> SGrid = { 1e-20, 1e-19, 1e-18, 1e-17, 1e-16, 1e-15, 1e-14, 1e-13, 1e-12, 1e-11, 1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4};       // <- Implement somewhere else
-	//std::vector<double> S_t_1 = {1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 6e-10, 7e-10, 8e-10, 9e-10, 10e-10}; 
-	//double S_t_1GeV = 4.5e-10;
-	
 	assert(zGrid.size() >= 2);
 	assert(GammaGrid.size() >= 2);
 	assert(SGrid.size() >= 2);	  
 	
 	//std::string dummy;
-	
-	if(m_log) std::cout<< "Going into ObtainSoverLMapping" << std::endl; //std::cin >> dummy;
-	std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline = ObtainSoverLMapping(source, Bounds(0.1_GeV, 100._GeV), zGrid, GammaGrid);
-	if(m_log) SoverLSpline->print();
+
 	if(m_log) std::cout << "Going into ObtainEffectiveEnergySpectrum" << std::endl;
-	std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline = ObtainEffectiveEnergySpectrum(source, EGrid, zGrid, GammaGrid, SoverLSpline);
+	std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline = ObtainEffectiveEnergySpectrum(source, EGrid, zGrid, GammaGrid);
 	if(m_log) dNdESpline->print();
 	if(m_log) std::cout<< "Going into ObtainFluxThreshold" << std::endl; //std::cin >> dummy;
-	std::shared_ptr<gsl2DInterpolationWrapper> S_tIntensitySpline = ObtainFluxThreshold(source, IntensityBins, GammaGrid, dNdESpline);
-	if(m_log) S_tIntensitySpline->print();
-	std::shared_ptr<gsl2DInterpolationWrapper> S_tAPSSpline = ObtainFluxThreshold(source, APSBins, GammaGrid, dNdESpline);
-	if(m_log) { std::cout << std::endl; S_tAPSSpline->print(); }
+	std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > S_tIntensitySplines = ObtainFluxThreshold(source, IntensityBins, GammaGrid, dNdESpline);
+	//if(m_log) S_tIntensitySpline->print();
+	std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > S_tAPSSplines = ObtainFluxThreshold(source, APSBins, GammaGrid, dNdESpline);
+	//if(m_log) { std::cout << std::endl; S_tAPSSpline->print(); }
 	if(m_log) std::cout<< "Going into ObtaindNoverdS" << std::endl; //std::cin >> dummy;
-	std::shared_ptr<gsl2DInterpolationWrapper> dNdSSpline = ObtaindNoverdS(source, SGrid, GammaGrid, SoverLSpline);
-	if(m_log) dNdSSpline->print();
+	std::shared_ptr<gsl2DInterpolationWrapper> dNdSSpline = ObtaindNoverdS(source, Bounds(0.1_GeV, 100._GeV), zGrid, SGrid, GammaGrid);
+	//if(m_log) dNdSSpline->print();
+	if(m_log) std::cout << "Obtaining dNdS for each energy bin" << std::endl;
+	std::vector<std::shared_ptr<gsl2DInterpolationWrapper> > dNdSSplines; dNdSSplines.resize(IntensityBins.size());
+	for(unsigned int i = 0; i < IntensityBins.size(); i++) dNdSSplines[i] = ObtaindNoverdS(source, IntensityBins[i], zGrid, SGrid, GammaGrid);
+	
 	if(m_log)std::cout<< "Calculate Intensity and autocorrelation for different Energy bins" << std::endl; //std::cin >> dummy;
 	/// Calculate Intensity and autocorrelation for different Energy bins
 	
 	
 	TF1* SbdNdS = new TF1((std::string("Integrand S^alpha * dN/dS for ") + source->Name).c_str(),
-						[dNdSSpline] (double* args, double* params) // args[0]: log(S)   params[0]: Gamma  params[1]: alpha
+						[&dNdSSplines] (double* args, double* params) // args[0]: log(S)   params[0]: Gamma  params[1]: alpha  params[2]: intensitybin index
 						{ 	//std::cout << "in S^alpha * dN/dS  S = " << args[0] << '\t' << powf(args[0], params[1]) <<  '\t' << source->dNoverdS( args[0], params[0], NULL) <<  std::endl;
 							//if(powf(args[0], params[1]
-							return exp(args[0]*(1.+params[1])) * std::max(0., dNdSSpline->Eval( exp(args[0]), params[0])); },
-						SBounds_global.first, SBounds_global.second, 2);  			// check range
+							return exp(args[0]*(1.+params[1])) * std::max(0., dNdSSplines.at((int)params[2])->Eval( exp(args[0]), params[0])); },
+						log(SBounds_global.first), log(SBounds_global.second), 3);  			// check range
 	
 	TF1* GammaIntegrand = new TF1((std::string("Integrated S^alpha * dN/dS for ") + source->Name).c_str(),
 										[ SbdNdS, S_tIntensitySpline, &SGrid] (double* args, double* params) // args[0]: Gamma   params[0]: EBin 
@@ -93,16 +90,17 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 											source->GammaBounds.first, source->GammaBounds.second, 1);
 	
 	// first do Intensity
-	SbdNdS->SetParameter(1, 1.);  // b =1
+	SbdNdS->SetParameter(1, 1.);  // alpha =1
 	
 	for(unsigned int i = 0; i < IntensityBins.size(); i++)
 	{
-		
+		SbdNdS->SetParameter(2, i);
 		GammaIntegrand->SetParameter(0, (IntensityBins[i].first + IntensityBins[i].second)/2.);
 		
 		if(GammaGrid.size() == 2) // No Gamma dependency
 		{
-			const double S = S_tIntensitySpline->Eval((IntensityBins[i].first + IntensityBins[i].second)/2., GammaGrid[0]);
+			SbdNdS->SetParameter(0, GammaGrid.at(0));
+			const double S = S_tIntensitySpline->Eval((IntensityBins.at(i).first + IntensityBins.at(i).second)/2., GammaGrid.at(0));
 			source->Intensity.push_back(S <= SGrid.at(0)? 0 : SbdNdS->Integral(log(SGrid.at(0)), log(S), 1e-4)  );
 		}
 		else
@@ -131,14 +129,14 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 	
 	for(unsigned int i = 0; i < APSBins.size(); i++)
 	{	
-		GammaIntegrand->SetParameter(0, (APSBins[i].first + APSBins[i].second)/2.);
+		GammaIntegrand->SetParameter(0, (APSBins.at(i).first + APSBins.at(i).second)/2.);
 		
 		double* C_p = new double[DT->S_t_1.size()];  // Variate S_t to test dependence on flux threshold
 		for(unsigned int j = 0; j < DT->S_t_1.size(); j++)
 		{
 			if(GammaGrid.size() == 2)   
 			{
-				const double S = DT->S_t_1.at(j)/DT->S_t_1GeV*S_tAPSSpline->Eval((APSBins[i].first + APSBins[i].second)/2., GammaGrid[0]);
+				const double S = DT->S_t_1.at(j)/DT->S_t_1GeV*S_tAPSSpline->Eval((APSBins.at(i).first + APSBins.at(i).second)/2., GammaGrid.at(0));
 				C_p[j] = (S <= SGrid.at(0) ? 0 : SbdNdS->Integral(log(SGrid.at(0)), log(S), 1e-4));
 			}
 			else
@@ -155,12 +153,12 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 	delete GammaIntegrand;
 
 	delete SbdNdS;
-	
+	// now calc cross correlations
 	for(unsigned int i = 0; i < APSBins.size(); i++)
 	{
 		for(unsigned int j = 0; j < i; j++)
 		{
-			source->APS->at(i, j) = std::make_shared<gsl1DInterpolationWrapper>(*source->APS->at(i, i).get() *  *source->APS->at(j, j).get());
+			source->APS->at(i, j) = std::make_shared<gsl1DInterpolationWrapper>(sqrt(*source->APS->at(i, i).get() *  *source->APS->at(j, j).get()));
 			source->APS->at(j, i) = source->APS->at(i, j); 
 		}
 	}
@@ -196,16 +194,70 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 
 
 /// Calculates dN/dS 
-std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(AstrophysicalSource* source, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline)
+std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(AstrophysicalSource* source, Bounds EBin, const std::vector<double>& zGrid, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid)
 {
+	// Let's us convert S to L in the energy bin
+	auto SoverLSpline = ObtainSoverLMapping(source, EBin, zGrid, GammaGrid);
+	
+	// first calculate inner integral on grid in flux, redshift and photon index
+	auto IntegratedrohSpline = std::make_shared<Interpolation3DWrapper>(SGrid.data(), SGrid.size(), zGrid.data(), zGrid.size(), GammaGrid.data(), GammaGrid.size());	
+	
+	auto Integrandroh = new TF1(("Integrand roh*L/S for" + source->Name).c_str(),
+							[SoverLSpline, source] (double* args, double* params) 	// args[0]: S  params[0]: z  params[1]: Gamma
+							{	const double SoverL = SoverLSpline->Eval(params[0], params[1]); assert(SoverL<=0); const double L = args[0]/SoverL;
+								if(L > source->LumBounds.second || L < source->LumBounds.first) return 0.;
+								return source->RescaledLuminosityFunction(L, params[0], params[1])/SoverL; },
+								SBounds_global.first, SBounds_global.second, 2);
+	for(unsigned int k = 0; k < GammaGrid.size(); k++)
+	{
+		for(unsigned int j = 0; j < zGrid.size(); j++)
+		{
+			Integrandroh->SetParameters(zGrid.at(j), GammaGrid.at(k));
+			for(unsigned int i = 0; i< SGrid.size(); i++)
+			{
+				IntegratedrohSpline->Val(i, j, k) = Integrandroh->Integral(SGrid.at(i), SGrid.at(i)*1.1, 1e-3);	// cm^2 to Mpc^2
+			}
+		}
+	}
+	delete Integrandroh;
+	//if(m_log)IntegratedrohSpline->print();
+	// now calculate outer integral in redshift
 	auto dNdSSpline = std::make_shared<gsl2DInterpolationWrapper>(SGrid.data(), SGrid.size(), GammaGrid.data(), GammaGrid.size());
 	
 	Bounds zBounds_local; zBounds_local.first = std::max(source->zBounds.first, zBounds_global.first);
 	zBounds_local.second = std::min(source->zBounds.second, zBounds_global.second);
 	
-	// Evaluate inner integral on a 3dim grid
-	//auto rohdVdzIntegrated = std::make_shared<Interpolation3DWrapper>(zGrid.data(), zGrid.size(), GammaGrid.data(), GammaGrid.size(), 
-	//Interpolation3DWrapper(const double* _x,unsigned int n_x, const double* _y,unsigned int n_y, const double* _z,unsigned int n_z)
+	auto IntegratedrohdVdz = new TF1(("Integrand dz\\int roh*dV/dz for " + source->Name).c_str(),
+										[IntegratedrohSpline, this] (double* args, double* params)	// args[0]:log(z) params[0]: S  params[1]: Gamma
+										{ return exp(args[0])*IntegratedrohSpline->Eval(params[0], exp(args[0]), params[1])*CM->ComovingVolumeElement(exp(args[0])); },
+										log(zBounds_local.first), log(zBounds_local.second), 2);
+	
+	for(unsigned int i = 0; i < SGrid.size(); i++)
+	{
+		for(unsigned int j = 0; j < GammaGrid.size(); j++)
+		{
+			IntegratedrohdVdz->SetParameters(SGrid.at(i), GammaGrid.at(j));
+			dNdSSpline->Val(i, j) = IntegratedrohdVdz->Integral(log(zBounds_local.first), log(zBounds_local.second), 1e-3)/(0.1*SGrid.at(i));
+		}
+	}
+	delete IntegratedrohdVdz;
+	dNdSSpline->Initialize();	
+
+	return dNdSSpline;
+}										
+
+/*
+ * 
+/// Calculates dN/dS 
+std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(AstrophysicalSource* source, Bounds EBin, const std::vector<double>& zGrid, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid)
+{
+	auto SoverLSpline = ObtainSoverLMapping(source, EBin, zGrid, GammaGrid);
+	
+	auto dNdSSpline = std::make_shared<gsl2DInterpolationWrapper>(SGrid.data(), SGrid.size(), GammaGrid.data(), GammaGrid.size());
+	
+	Bounds zBounds_local; zBounds_local.first = std::max(source->zBounds.first, zBounds_global.first);
+	zBounds_local.second = std::min(source->zBounds.second, zBounds_global.second);
+	
 	
 	// Since the integral borders of the inner integral depend on the outer integral, we have to do it like this
 	
@@ -213,15 +265,15 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(Astrophysic
 							[source, this] (double *args, double* params) // args[0]: log(L)  params[0]:z   params[1]: Gamma   
 							{ 	//std::cout << source->RescaledLuminosityFunction(args[0], params[0], params[1]) << '\t' << CM->ComovingVolume(params[0]) << std::endl;
 								//if(isnan(source->RescaledLuminosityFunction(args[0], params[0], params[1]))) std::cout << "nan for L = " << args[0] << "  z = " << params[0] << "  Gamma = " << params[1] << std::endl;
-								return  exp(args[0])/1._ergpers*source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1])*CM->ComovingVolumeElement(params[0]); },
+								return  exp(args[0])*source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1])*CM->ComovingVolumeElement(params[0]); },
 							log(LuminosityBounds_global.first), log(LuminosityBounds_global.second), 2);
 							
 	TF1* IntegratedrohdVdzOverL = new TF1((std::string("Integrated(rho dV/dz) over L for ") + source->Name).c_str(),   
 										[source, rohdVdz, SoverLSpline] (double *args, double* params) // args[0]: log(z)  params[0]: S  params[1]: Gamma 
 										{ 	double SoverL = SoverLSpline->Eval(exp(args[0]), params[1]);
-											rohdVdz->SetParameters(exp(args[0])/*z*/, params[1]/*Gamma*/);
-											//std::cout << "S: " << params[0] <<"SOverL: " << SoverL << "   Int bounds: " << params[0] / SoverL << " - " << std::max(1.1*params[0], params[0] + deltaS_min)/ SoverL << std::endl;
-											return  exp(args[0])*rohdVdz->Integral(log(params[0] / SoverL) , log(1.1*params[0]/SoverL), 1e-4); }, // Integrate from log(L(S)) to log(L(S+deltaS)) 
+											rohdVdz->SetParameters(exp(args[0]), params[1]);
+											std::cout << "S: " << params[0] <<"SOverL: " << SoverL << "   Int bounds: " << params[0] / SoverL << " - " << 1.1*params[0]/SoverL << std::endl;
+											return  exp(args[0])*rohdVdz->Integral(log(params[0] / SoverL) , log(1.1*params[0]/SoverL), 1e-4)/1._ergpers; }, // Integrate from log(L(S)) to log(L(S+deltaS)) 
 										zBounds_local.first, zBounds_local.second, 2);
 	for(unsigned int i = 0; i < SGrid.size() ; i++)
 	{
@@ -238,7 +290,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(Astrophysic
 	dNdSSpline->Initialize();	
 
 	return dNdSSpline;
-}										
+}					*/
 
 /// Obtain mapping between flux S and Luminosity L for different redshifts and - if applicable - different photon indeces
 std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainSoverLMapping(AstrophysicalSource* source, Bounds EnergyBin, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid)
@@ -250,12 +302,12 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainSoverLMapping(Astrop
 	TF1* SIntegrand = new TF1((std::string("Integrand dN/dE for ") + source->Name).c_str(), 
 								[source] (double *args, double *params)   //  args[0]: Energy    params[0]: z   params[1]: Gamma
 								{ return source->EnergySpectrum(args[0], params[0], params[1]); },
-								/*Emin*/ 0.1_GeV, /*Emax*/ 100._GeV, /*npar*/ 2);
+								/*Emin*/EBounds_global.first, /*Emax*/EBounds_global.second, /*npar*/ 2);
 					
 	TF1* LIntegrand = new TF1((std::string("Integrand E/k dN/dE for ") + source->Name).c_str(),
 								[source] (double *args, double *params)   //  args[0]: Energy    params[0]: z   params[1]: Gamma
 								{ return args[0]*source->EnergySpectrumOverK(args[0], params[0], params[1]) ; },
-								/*Emin*/ EnergyBin.first, /*Emax*/ EnergyBin.second, /*npar*/ 2);
+								/*Emin*/   0.1_GeV, /*Emax*/ 100._GeV, /*npar*/ 2);
 	
 	
 	// Integrate
@@ -264,73 +316,78 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainSoverLMapping(Astrop
 	{
 		for(unsigned int j = 0; j < GammaGrid.size(); j++)
 		{
-			SIntegrand->SetParameters(zGrid[i], GammaGrid[j]);
-			LIntegrand->SetParameters(zGrid[i], GammaGrid[j]);
-			L = LIntegrand->Integral(EnergyBin.first, EnergyBin.second, 1e-3)*1.602e-3  *1._ergpers;		// convert from GeV to erg
-			S = SIntegrand->Integral(0.1_GeV, 100._GeV, 1e-3)*1._photonspercm2s;
-			SoverLSpline->Val(i, j) = ( L <= 0 ?  0. : S / (L*4.*M_PI* pow(CM->ComovingDistance(zGrid[i]),2.)*9.521e48/pow(1._Mpc,2.) ) );	// Mpc^2 to cm^2 	// lol
+			SIntegrand->SetParameters(zGrid.at(i), GammaGrid.at(j));
+			LIntegrand->SetParameters(zGrid.at(i), GammaGrid.at(j));
+			L = LIntegrand->Integral(0.1_GeV , 100._GeV , 1e-3)*1.602e-3  *1._ergpers;		// convert from GeV to erg
+			S = SIntegrand->Integral(EnergyBin.first, EnergyBin.second, 1e-3)*1._photonspercm2s;	
+			SoverLSpline->Val(i, j) =  S / (L*4.*M_PI* pow(CM->ComovingDistance(zGrid[i]),2.)*9.521e48/pow(1._Mpc,2.)) ;	// Mpc^2 to cm^2
 		}
 	}
 	delete SIntegrand; delete LIntegrand;  				// Clean up	
 	
-	// Interpolate S/L over the Grid
-	SoverLSpline->Initialize();
+	SoverLSpline->Initialize();// Interpolate S/L over the Grid
 
 	return SoverLSpline;
 }
 
-std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<Bounds>& EBins, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline)
+std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > Benchmark::ObtainFluxThreshold(AstrophysicalSource* source, const std::vector<Bounds>& EBins, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline)
 {	
-	// Calculate flux threshold
-	std::vector<double> EBinsMid; EBinsMid.resize(EBins.size());
-	for(unsigned int i =0; i < EBins.size(); i++) EBinsMid[i] = (EBins[i].first + EBins[i].second)/2.;
-	
-	auto S_tSpline = std::make_shared<gsl2DInterpolationWrapper>(EBinsMid.data(), EBins.size(), GammaGrid.data(), GammaGrid.size());
+	// Calculate flux threshold	
+	double** S_t = new double*[EBins.size()]; for(unsigned int i = 0; i < EBins.size(); i++) S_t[i] = new double[GammaGrid.size()];
 	
 	TF1* dNdE = new TF1((std::string("Integrand dN/dE for ") + source->Name).c_str(),
 							[dNdESpline, source] (double *args, double* params) // args[0]: Energy   params[0]: Gamma
-							{ return  std::max(0., dNdESpline->Eval(args[0], params[0])); },
-							EBins[0].first, EBins[EBins.size()-1].second, 1);
+							{ return  dNdESpline->Eval(args[0], params[0]); },
+							EBounds_global.first, EBounds_global.second, 1);
 	
 	double denominator = 0;
 	for(unsigned int i = 0; i < GammaGrid.size(); i++)
 	{
-		dNdE->SetParameter(0, GammaGrid[i]);
-		denominator = dNdE->Integral(1._GeV, 100._GeV, 1e-4); 
+		dNdE->SetParameter(0, GammaGrid.at(i));
+		denominator = dNdE->Integral(1._GeV, 100._GeV, 1e-4); 	// We can save some computation time by doing the calculations this way, but need to be careful with pointers
 		for(unsigned int j = 0; j < EBins.size(); j++)
 		{
 			if(denominator <= 0) 
-				S_tSpline->Val(j, i) =0;
+				S_t[j][i] = 0;
 			else 	
-				S_tSpline->Val(j, i) = dNdE->Integral(EBins[j].first, EBins[j].second, 1e-4) * DT->S_t_1GeV / denominator;
+				S_t[j][i] = dNdE->Integral(EBins.at(j).first, EBins.at(j).second, 1e-4) * DT->S_t_1GeV / denominator;
 		} 			// Integrate in specific Energy Bin
 		
 	}
 	delete dNdE;
-	S_tSpline->Initialize();
+	std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > S_tSplines;
+	for(unsigned int i = 0; i < EBins.size(); i++) 
+	{
+		S_tSplines.push_back(std::make_shared<gsl1DInterpolationWrapper>(GammaGrid.data(), GammaGrid.size(), S_t[i]));
+		delete []S_t[i];
+	}
+	delete []S_t;
 
-	return S_tSpline;
+	return S_tSplines;
 }
 
-std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpectrum(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid, std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline)
+std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpectrum(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid)
 {
+	std::shared_ptr<gsl2DInterpolationWrapper> SoverLSpline = ObtainSoverLMapping(source, Bounds(0.1_GeV, 100._GeV), zGrid, GammaGrid);
+	
 	std::vector<double> dIoverdz; 
 	dIoverdz.resize(zGrid.size());
-	//std::string dummy;
-	if(m_log)std::cout<< "Obtaining dI/dz" << std::endl; //std::cin >> dummy;
+	if(m_log)std::cout<< "Obtaining dI/dz" << std::endl;
+	Bounds LBounds_local = Bounds(std::max(source->LumBounds.first, LuminosityBounds_global.first), std::min(source->LumBounds.second, LuminosityBounds_global.second));
+	
 	/// Obtain dI/dz
 	if(GammaGrid.size() == 2)	// no Gamma Dependency
 	{
 		TF1* Integrand = new TF1("1D Integrand for dI/dz",   
 								[source, SoverLSpline, this] (double* args, double* params) // args[0]: log(L)   params[0]: z   params[1]: Gamma, but should be irrelevant
-								{ double S = exp(args[0])* SoverLSpline->Eval(params[0], params[1]);
+								{ const double S = exp(args[0])* SoverLSpline->Eval(params[0], params[1]);
 									//std::cout << "1D Integrand: " << exp(args[0]) << '\t' << S << '\t' << CM->ComovingVolumeElement(params[0]) << '\t' << source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1]) << '\t' << (1.-DT->DetectionEfficiency(S)) << std::endl;
 								  return exp(args[0])*S*CM->ComovingVolumeElement(params[0])*source->RescaledLuminosityFunction(exp(args[0]), params[0], params[1])*(1.-DT->DetectionEfficiency(S)); },
 								 log(LuminosityBounds_global.first), log(LuminosityBounds_global.second), /*npar*/ 2);
 		for(unsigned int i = 0; i < zGrid.size(); i++)
 		{
-			Integrand->SetParameters(zGrid[i], GammaGrid[0]);
-			dIoverdz.at(i) = Integrand->Integral(log(LuminosityBounds_global.first), log(LuminosityBounds_global.second), 1e-4)/9.521e48*pow(1._Mpc,2.);
+			Integrand->SetParameters(zGrid.at(i), GammaGrid.at(0));
+			dIoverdz.at(i) = Integrand->Integral(log(LBounds_local.first), log(LBounds_local.second), 1e-4)/1e48;	// normalization to compare with other
 		}		
 		delete Integrand;												
 	}
@@ -338,17 +395,15 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 	{
 		TF2* Integrand = new TF2("2D Integrand for dI/dz",     
 								[source, SoverLSpline, this] (double* args, double* params) // args[0]: log(L)  args[1]: Gamma   params[0]: z 
-								{ double S = exp(args[0])* SoverLSpline->Eval(params[0], args[1]);
-									double val =  exp(args[0]) * S * CM->ComovingVolumeElement(params[0]) * source->RescaledLuminosityFunction(exp(args[0]), params[0], args[1]) * (1.-DT->DetectionEfficiency(S));
-									//std::cout << exp(args[0]) << '\t' << S << '\t' << CM->ComovingVolumeElement(params[0]) << '\t' << source->RescaledLuminosityFunction(exp(args[0]), params[0], args[1]) << '\t' << (1.-DT->DetectionEfficiency(S)) << std::endl;
-									 return val; },
+								{ const double S = exp(args[0])* SoverLSpline->Eval(params[0], args[1]);
+									return  exp(args[0]) * S * CM->ComovingVolumeElement(params[0]) * source->RescaledLuminosityFunction(exp(args[0]), params[0], args[1]) * (1.-DT->DetectionEfficiency(S)); },
 								 log(LuminosityBounds_global.first), log(LuminosityBounds_global.second),
-								 source->GammaBounds.first, source->GammaBounds.second, /*npar*/ 1);
+									source->GammaBounds.first, source->GammaBounds.second, /*npar*/ 1);
 		for(unsigned int i = 0; i < zGrid.size(); i++)
 		{
-			Integrand->SetParameters(zGrid[i], 0.);
-			dIoverdz.at(i) = Integrand->Integral(log(LuminosityBounds_global.first), log(LuminosityBounds_global.second), 
-												source->GammaBounds.first, source->GammaBounds.second , 1e-4)/9.521e48*pow(1._Mpc,2.);
+			Integrand->SetParameters(zGrid.at(i), 0.);
+			dIoverdz.at(i) = Integrand->Integral(log(LBounds_local.first), log(LBounds_local.second), 
+												source->GammaBounds.first, source->GammaBounds.second , 1e-4)/1e48;
 		}		
 		delete Integrand;
 	}
@@ -356,7 +411,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 	if(m_log)
 	{
 		std::cout << "dI/dz = ";
-		for(unsigned int i = 0; i < zGrid.size(); i++) std::cout << "(" << zGrid[i] << "," <<dIoverdz[i] << ")" << '\t';
+		for(unsigned int i = 0; i < zGrid.size(); i++) std::cout << "(" << zGrid[i] << "," << dIoverdz[i] << ")" << '\t';
 	}
 	
 	/// Use dI/dz to calculate effective energy spectrum
@@ -364,14 +419,13 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 	
 	if(m_plot)
 	{
-		auto g = new TGraph(dIdzSpline->MakeGraph());  g->SetName(source->Name.c_str());
+		auto g = dIdzSpline->MakeGraph();  g->SetName(source->Name.c_str());
 		dIdzFile->cd();
 		g->Write();
 	}	
 	
 	if(m_log) std::cout<< std::endl << "calculate effective energy spectrum" << std::endl; //std::cin >> dummy;
-	Bounds zBounds_local; zBounds_local.first = zGrid[0];
-	zBounds_local.second = zGrid[zGrid.size()-1];
+	Bounds zBounds_local; zBounds_local.first = zGrid[0]; zBounds_local.second = zGrid[zGrid.size()-1];
 	
 	auto dNdESpline = std::make_shared<gsl2DInterpolationWrapper>(EGrid.data(), EGrid.size(), GammaGrid.data(), GammaGrid.size());
 	
@@ -382,24 +436,24 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 							{ //std::cout << "z = " << exp(args[0]) << "  E = " << params[0] << "  Gamma = " << params[1]
 								//	<< "   dI/dz = " << dIdzSpline->Eval(exp(args[0])) << "  dN/dE = " << source->EnergySpectrum(params[0], args[0], params[1]) << std::endl;
 							 return exp(args[0])* dIdzSpline->Eval(exp(args[0])) * source->EnergySpectrum(params[0], exp(args[0]), params[1]); },
-							zBounds_local.first, zBounds_local.second, /*npar*/ 2);
+							log(zBounds_local.first), log(zBounds_local.second), /*npar*/ 2);
 							
 							
 	TF1* dIdz = new TF1((std::string("Integrand dI/dz for ") + source->Name).c_str() ,
 							[dIdzSpline, source] (double* args, double* params) // args[0]: log(z) 
 							{ return exp(args[0])*dIdzSpline->Eval(exp(args[0])); },
-							zBounds_local.first, zBounds_local.second, /*npar*/ 0);
+							log(zBounds_local.first), log(zBounds_local.second), /*npar*/ 0);
 							
 	double denominator = dIdz->Integral(log(zBounds_local.first), log(zBounds_local.second), 1e-4);
-	for(unsigned int i = 0; i < GammaGrid.size() ; i++)
+	for(unsigned int i = 0; i < EGrid.size() ; i++)
 	{
-		for(unsigned int j = 0; j < EGrid.size(); j++)
+		for(unsigned int j = 0; j < GammaGrid.size(); j++)
 		{
-			if(denominator <= 0) dNdESpline->Val(j, i) = 0;
+			if(denominator <= 0) dNdESpline->Val(i, j) = 0;
 			else
 			{
-				dIdzdNdE->SetParameters(EGrid[j], GammaGrid[i]);
-				dNdESpline->Val(j, i) = dIdzdNdE->Integral(log(zBounds_local.first), log(zBounds_local.second), 1e-3)/denominator;;
+				dIdzdNdE->SetParameters(EGrid.at(i), GammaGrid.at(j));
+				dNdESpline->Val(i, j) = dIdzdNdE->Integral(log(zBounds_local.first), log(zBounds_local.second), 1e-3)/denominator;
 			}
 		}
 	}
@@ -414,7 +468,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 
 void Benchmark::calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> >& DM, const std::vector<double>& Multipoles)
 {
-	assert(zGridLen >=1);
+	assert(zGridLen >=2); assert(kGridLen >=2);
 	std::vector<double> zGrid; zGrid.resize(zGridLen);
 	std::vector<double> kGrid; kGrid.resize(kGridLen);
 	
@@ -458,17 +512,16 @@ void Benchmark::calculateIntensityForDM(std::shared_ptr<DarkMatter> DM, const st
 
 void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::vector<Bounds>& EBins, const std::vector<double>& zGrid, const std::vector<double>& kGrid, const std::vector<double>& Multipoles)
 {
-	/// Calculate 3D Power Spectrum and then APS
-	TF1* P1HaloIntegrand = new TF1((std::string("The Integrand dn/dm * sourcedensityFT^2 for the 1 Halo term for ") + DM->Name).c_str(),
-									[DM, this] (double* args, double* params) // args[0]: log(M)  params[0]: k  params[1]: z
-									{ //std::cout << "P1: " << exp(args[0]) << '\t' << params[0] << '\t' << HM->HaloMassFunction(exp(args[0]), params[1]) << '\t' << DM->SourceDensityFT(params[0], exp(args[0]), params[1]) << std::endl;
-										return exp(args[0])*HM->HaloMassFunction(exp(args[0]), params[1]) * pow(DM->SourceDensityFT(params[0], exp(args[0]), params[1]), 2.); },
+	/// Calculate 3D Power Spectrum and then APS	
+	auto P1HaloIntegrand = new TF1(("P1 Halo Integrand for " + DM->Name).c_str(),
+									[this, DM] (double* args, double* params)	// args[0]: log(M)  params[0]: k   params[1]: z
+									{	return exp(args[0])* HM->HaloMassFunction(exp(args[0]), params[1]) * pow(DM->SourceDensityFT(params[0], exp(args[0]), params[1]), 2.);	},
 									log(HM->MBounds.first), log(HM->MBounds.second), 2);
 	
-	TF1* P2HaloIntegrand = new TF1((std::string("The Integrand dn/dm * LinearHaloBias *sourcedensityFT for the 2 Halo term for ") + DM->Name).c_str(),
+	auto P2HaloIntegrand = new TF1(("The Integrand dn/dm * LinearHaloBias *sourcedensityFT for the 2 Halo term for " + DM->Name).c_str(),
 									[DM, this] (double* args, double* params) // args[0]: log(M)  params[0]: k  params[1]: z
 									{ //std::cout << "P2: " << exp(args[0]) << '\t' << params[0] << '\t' << HM->HaloMassFunction(exp(args[0]), params[1]) << '\t' << HM->LinearHaloBias(exp(args[0]), params[1]) << '\t' << DM->SourceDensityFT(params[0], exp(args[0]), params[1]) << std::endl;
-										return exp(args[0])*HM->HaloMassFunction(exp(args[0]), params[1]) * HM->LinearHaloBias(exp(args[0]), params[1]) * DM->SourceDensityFT(params[0], exp(args[0]), params[1]); },
+										return exp(args[0])* HM->HaloMassFunction(exp(args[0]), params[1]) * HM->LinearHaloBias(exp(args[0]), params[1]) * DM->SourceDensityFT(params[0], exp(args[0]), params[1]); },
 									log(HM->MBounds.first), log(HM->MBounds.second), 2);
 	
 	auto _3DPowerSpectrumSpline = std::make_shared<gsl2DInterpolationWrapper>(kGrid.data(), kGrid.size(), zGrid.data(), zGrid.size());
@@ -484,7 +537,8 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 			p2 = P2HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-3);
 			_3DPowerSpectrumSpline->Val(i, j) =  p1 + pow(p2, 2)*(*(HM->Plin))(kGrid.at(i), zGrid.at(j));
 			
-			if(m_log) std::cout << '(' << i << ", " << j << "): " << _3DPowerSpectrumSpline->Val(i, j) << std::endl;
+			//if(m_log) std::cout << "k = " << kGrid.at(i) << "  z = " << zGrid.at(j) << "  p1 = " << p1 << "  p2 = " << p2 << std::endl;
+			//if(m_log) std::cout << '(' << i << ", " << j << "): " << _3DPowerSpectrumSpline->Val(i, j) << std::endl;
 		}
 	} 
 	delete P1HaloIntegrand; delete P2HaloIntegrand;
@@ -493,11 +547,13 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 	
 	if(m_plot)
 	{
-		std::vector<double> PS; PS.resize(kGrid.size());
-		for(unsigned int i = 0; i < kGrid.size(); i++) PS[i] = _3DPowerSpectrumSpline->Eval(kGrid[i]*h, 1);
-		auto g = new TGraph(kGrid.size(), kGrid.data(), PS.data()); g->SetName(DM->Name.c_str());
+		std::vector<int> z = {0, 1, 3};
 		_3DPSFile->cd();
-		g->Write();
+		for(unsigned int i = 0; i < z.size(); i++)
+		{
+			auto g = _3DPowerSpectrumSpline->MakeGraphAty(z.at(i)); g->SetName((DM->Name + std::to_string(z.at(i))).c_str());		
+			g->Write();
+		}
 	}
 	
 	DM->APS = std::make_shared<AngularPowerSpectrum<double> >(EBins.size(), EBins.size(), Multipoles.size());
@@ -517,10 +573,10 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 			for(unsigned int k = 0; k < Multipoles.size(); k++)
 			{
 				APSCrossIntegrand->SetParameter(0, Multipoles.at(k));
-				DM->APS->at(i, j, k) = APSCrossIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second,
-															EBins[j].first, EBins[j].second, 1e-3);
+				DM->APS->at(i, j, k) = APSCrossIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins.at(i).first, EBins.at(i).second,
+															EBins.at(j).first, EBins.at(j).second, 1e-3);
 				DM->APS->at(j, i, k) = DM->APS->at(i, j, k);
-				if(m_log) std::cout << "( " << i << ", " << j << ", " << k << "): " << DM->APS->at(i,j,k) << std::endl;
+				//if(m_log) std::cout << "( " << i << ", " << j << ", " << k << "): " << DM->APS->at(i,j,k) << std::endl;
 			}
 		}
 	}
@@ -537,9 +593,9 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 	{
 		for(unsigned int k = 0; k < Multipoles.size(); k++)
 		{
-			APSAutoIntegrand->SetParameter(0, Multipoles[k]);
-			DM->APS->at(i, i, k) = APSAutoIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins[i].first, EBins[i].second, 1e-3);
-			if(m_log) std::cout << "( " << i << ", " << k << "): " << DM->APS->at(i,i,k) << std::endl;
+			APSAutoIntegrand->SetParameter(0, Multipoles.at(k));
+			DM->APS->at(i, i, k) = APSAutoIntegrand->Integral(log(zBounds_global.first), log(zBounds_global.second), EBins.at(i).first, EBins.at(i).second, 1e-3);
+			//if(m_log) std::cout << "( " << i << ", " << k << "): " << DM->APS->at(i,i,k) << std::endl;
 		}
 	}
 	delete APSAutoIntegrand;
