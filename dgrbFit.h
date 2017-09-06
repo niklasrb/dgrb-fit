@@ -165,7 +165,8 @@ protected:
 				}
 			}
 		}
-		return chiSquared/(pow(APSBins.size(),2)*APSMeasurement->MultipoleNumber()/2.);
+		int n = APSBins.size(); 	// number of elements in the triangular matrix should be given by (n^2 - n)/2
+		return chiSquared/((pow(n,2) -n)/2*APSMeasurement->MultipoleNumber());
 	}
 	
 	double loglike(double* Cube, int *npar) override
