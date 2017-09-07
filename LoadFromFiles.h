@@ -10,6 +10,10 @@
 #include <vector>
 #include <sstream>
 
+#include "TROOT.h"
+#include "TFile.h"
+
+#include "Constants.h"
 #include "InterpolationWrapper.h"
 #include "EBLAbsorbtionCoefficient.h"
 #include "LinearMatterPowerSpectrum.h"
@@ -26,7 +30,7 @@ std::shared_ptr<EBLAbsorbtionCoefficient> LoadEBLAbsorbtionCoefficient(std::fstr
 	double** tau = new double*[EGridSize]; for(int i = 0; i < EGridSize; i++) tau[i] = new double[zGridSize];
 	
 	// Get Energy data:
-	for(int i = 0; i < EGridSize; i++) file >> EGrid[i];
+	for(int i = 0; i < EGridSize; i++) {	file >> EGrid[i]; EGrid[i]*=1e3_GeV;	}
 	// Read per Block
 	for(int j = 0; j < zGridSize; j++)
 	{
