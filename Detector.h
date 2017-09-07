@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <vector>
+#include "Constants.h"
 
 
 class Detector
@@ -18,16 +19,17 @@ public:
 class FermiLAT : public Detector
 {
 public:
-	FermiLAT() : Detector(5e-10) 
+	FermiLAT() : Detector(5e-10_photonspercm2s) 
 	{
-		S_t_1 = {1e-10, 2e-10, 3e-10, 4e-10, 5e-10, 6e-10, 7e-10, 8e-10, 9e-10, 10e-10};
+		S_t_1 = {1e-10_photonspercm2s, 2e-10_photonspercm2s, 3e-10_photonspercm2s, 4e-10_photonspercm2s, 
+					5e-10_photonspercm2s, 6e-10_photonspercm2s, 7e-10_photonspercm2s, 8e-10_photonspercm2s, 9e-10_photonspercm2s, 10e-10_photonspercm2s};
 	}
 	
 	double DetectionEfficiency(const double S) override
 	{
-		if(S >= 5e-8)
+		if(S >= 5e-8_photonspercm2s)
 			return 1.;
-		return pow(S / 5e-8, 2.);
+		return pow(S / 5e-8_photonspercm2s, 2.);
 	}
 };
 
