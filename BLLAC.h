@@ -21,16 +21,15 @@ protected:
 	double p_1;
 	double p_2;
 
-	BLLAC(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string name) : AstrophysicalSource(CM, tau, name)
+	BLLAC(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string name, const double E_cut) : AstrophysicalSource(CM, tau, name), E_cut(E_cut)
 	{
 		zBounds.first = 0; zBounds.second = 6;
 		GammaBounds.first = 2.1 - 2*0.26;  GammaBounds.second = 2.1 + 2*0.26; 
 	}
 	
 public:
-	BLLAC(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : BLLAC(CM, tau, std::string("BLLAC"))
+	BLLAC(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, const double E_cut) : BLLAC(CM, tau, std::string("BLLAC"), E_cut)
 	{
-		E_cut = 40._GeV; // correct if class is used
 		A = 3.39e-9/pow(1._Mpc,3)*1e48_ergpers;
 		gamma_1 = 0.27;
 		L_s = 0.28*1e45_ergpers;
@@ -56,7 +55,7 @@ public:
 		return 1/sqrt(2.*M_PI*0.26*0.26) * exp(-pow((Gamma - 2.1),2)/(2.*0.26*0.26));
 	}			
 	
-	double LuminosityFunction(const double L, const double z, const double Gamma) override
+	double LuminosityFunction(const double L, const double z) override
 	{
 		const double z_c = z_c_s*pow(L/1e48_ergpers,alpha);
 		const double evo = 1./(pow((1.+z)/(1.+z_c),p_1) + pow((1+z)/(1+z_c),p_2));
@@ -68,9 +67,8 @@ public:
 class LISP : public BLLAC
 {
 public:
-	LISP(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : BLLAC(CM, tau, std::string("LISP"))
+	LISP(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, const double E_cut = 37._GeV) : BLLAC(CM, tau, std::string("LISP"), E_cut)
 	{
-		E_cut = 37._GeV;
 		A = 4.37e-9/pow(1._Mpc,3)*1e48_ergpers;
 		gamma_1 = 1.19;
 		L_s = 30.8e45_ergpers;
@@ -94,9 +92,8 @@ public:
 class HSP : public BLLAC
 {
 public:
-	HSP(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau ) : BLLAC(CM, tau, std::string("HSP"))
+	HSP(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, const double E_cut = 910._GeV) : BLLAC(CM, tau, std::string("HSP"), E_cut)
 	{
-		E_cut = 910._GeV;
 		A = 98.e-9/pow(1._Mpc,3)*1e48_ergpers;
 		gamma_1 = 2.88;
 		L_s = 3.15e45_ergpers;

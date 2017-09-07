@@ -9,11 +9,11 @@
 class FSRQ : public AstrophysicalSource
 {
 protected:
-	const double E_cut = 6._GeV;
+	const double E_cut;
 	const double E_0 = 1._GeV;
 	
 public:
-	FSRQ(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : AstrophysicalSource(_CM, tau, std::string("FSRQ"))
+	FSRQ(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, double E_cut = 6._GeV) : AstrophysicalSource(_CM, tau, std::string("FSRQ")), E_cut(E_cut)
 	{
 		zBounds.first = 0; zBounds.second = 6;
 		GammaBounds.first = 2.44 - 2*0.18; GammaBounds.second = 2.44 + 2*0.18;
@@ -34,7 +34,7 @@ public:
 		return 1./sqrt(2.*M_PI*0.18*0.18) * exp(-pow((Gamma - 2.44), 2)/(2.*0.18*0.18));
 	}			
 	
-	double LuminosityFunction(const double L, const double z, const double Gamma) override
+	double LuminosityFunction(const double L, const double z) override
 	{
 		//defining parameters of the best fit model
 		const double A = 3.06e-9/pow(1._Mpc,3)*1e48_ergpers; 
