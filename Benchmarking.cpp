@@ -63,7 +63,161 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 	//if(m_log) S_tIntensitySpline->print();
 	std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > S_tAPSSplines = ObtainFluxThreshold(source, APSBins, GammaGrid, dNdESpline);
 	//if(m_log) { std::cout << std::endl; S_tAPSSpline->print(); }
-	if(m_log) std::cout<< "Going into ObtaindNoverdS" << std::endl; //std::cin >> dummy;
+	
+	/// Calculate Intensity
+	if(m_log) std::cout << "calculate intensity for " << source->Name << std::endl;
+	for(unsigned int i = 0; i < IntensityBins.size(); i++)
+	{
+		auto SoverL = ObtainSoverLMapping(source, IntensityBins.at(i), zGrid, GammaGrid);
+		
+		/// first integration in flux
+		auto SrhodVdzLoverSIntegrand = new TF1(("Integrand S*rho*dV/dz *L/S for " + source->Name).c_str(),
+										[SoverL, source, this] (double* args, double* params) 	// args[0]: log(S), params[0]: z : params[1]: Gamma
+										{	const double L = exp(args[0])/SoverL->Eval(params[0], params[1]); if(L < source->LumBounds.first || L > source->LumBounds.second) return 0.;
+											return exp(2*args[0]) * source->RescaledLuminosityFunction( L, params[0], params[1]) 					// undo unit conversion
+																	* CM->ComovingVolumeElement(params[0]) /(SoverL->Eval(params[0], params[1])/1.602e-3 *9.521e48/pow(1._Mpc,2.)); },
+											log(SBounds_global.first), log(SBounds_global.second), 2);
+		
+		auto SrhodVdzLoverSIntegratedSpline = std::make_shared<gsl2DInterpolationWrapper>(zGrid.data(), zGrid.size(), GammaGrid.data(), GammaGrid.size());
+		
+		double S_t = 0;
+		for(unsigned int j = 0; j < zGrid.size(); j++)
+		{
+			for(unsigned int k = 0; k < GammaGrid.size(); k++)
+			{
+				SrhodVdzLoverSIntegrand->SetParameters(zGrid.at(j), GammaGrid.at(k));
+				S_t = S_tIntensitySplines.at(i)->Eval(GammaGrid.at(k));
+				if(S_t <= SBounds_global.first) 
+					SrhodVdzLoverSIntegratedSpline->Val(j, k) = 0;
+				else 
+					SrhodVdzLoverSIntegratedSpline->Val(j, k) = SrhodVdzLoverSIntegrand->Integral(log(SBounds_global.first), log(S_t), 1e-3);
+			}
+		}
+		delete SrhodVdzLoverSIntegrand;
+		SrhodVdzLoverSIntegratedSpline->Initialize();
+		/// Now integrate in redshift
+		auto dIdzIntegrand = new TF1(("Integrand \\int dS S*rho*dV/dz*L/S for " + source->Name).c_str(),
+							[SrhodVdzLoverSIntegratedSpline] (double* args, double* params) 	// args[0]: log(z)  params[0]: Gamma
+							{ return exp(args[0]) *SrhodVdzLoverSIntegratedSpline->Eval(exp(args[0]), params[0]); },
+							log(zBounds_global.first), log(zBounds_global.second), 1);
+		
+		std::vector<double> dIdzIntegrated; dIdzIntegrated.resize(GammaGrid.size());
+		for(unsigned int j = 0; j < GammaGrid.size(); j++)
+		{
+			dIdzIntegrand->SetParameters(GammaGrid.at(j), 0.);
+			dIdzIntegrated.at(j) = dIdzIntegrand->Integral(log(zGrid.at(0)), log(zGrid.at(zGrid.size()-1)), 1e-3);	// integrate in local zBounds
+		}
+		delete dIdzIntegrand;
+		
+		if(GammaGrid.size() == 2)	// no gamma dependency, we're done
+		{
+			source->Intensity.push_back(dIdzIntegrated.at(0));
+		}
+		else 	// integrate over Gamma
+		{
+			auto dIdzIntegratedSpline = std::make_shared<gsl1DInterpolationWrapper>(GammaGrid.data(), GammaGrid.size(), dIdzIntegrated.data());
+			auto dIdG = new TF1(("Integrand \\int dz \\int dS S*rho*dV/dz*L/S for " + source->Name).c_str(),
+								[dIdzIntegratedSpline] (double* args, double* params)	// args[0]: Gamma
+								{ return dIdzIntegratedSpline->Eval(args[0]); },
+								source->GammaBounds.first, source->GammaBounds.second, 0);
+			source->Intensity.push_back( dIdG->Integral(source->GammaBounds.first, source->GammaBounds.second, 1e-3));
+			delete dIdG;
+		}
+		if(m_log) std::cout << "(" << IntensityBins.at(i).first << ", " << IntensityBins.at(i).second << "): " << source->Intensity.at(i) << std::endl;
+	}
+	
+	/// Calculate APS
+	if(m_log) std::cout << "calculate anisotropy for " << source->Name << std::endl;
+	source->APS = std::make_shared<AstrophysicalSourceAPS<std::shared_ptr<gsl1DInterpolationWrapper> > >(APSBins);
+	for(unsigned int i = 0; i < APSBins.size(); i++)
+	{
+		auto SoverL = ObtainSoverLMapping(source, APSBins.at(i), zGrid, GammaGrid);
+		
+		std::vector<double> S_t_1 = DT->S_t_1;	// test dependency on galazy catalog flux threshold 
+		
+		/// first integration in flux
+		auto SrhodVdzLoverSIntegrand = new TF1(("Integrand S^2*rho*dV/dz *L/S for " + source->Name).c_str(),
+										[SoverL, source, this] (double* args, double* params) 	// args[0]: log(S), params[0]: z : params[1]: Gamma
+										{	const double L = exp(args[0])/SoverL->Eval(params[0], params[1]); if(L < source->LumBounds.first || L > source->LumBounds.second) return 0.;
+											return exp(3.*args[0]) * source->RescaledLuminosityFunction( L, params[0], params[1]) 					// undo unit conversion
+																	* CM->ComovingVolumeElement(params[0]) /(SoverL->Eval(params[0], params[1])/1.602e-3 *9.521e48/pow(1._Mpc,2.)); },
+											log(SBounds_global.first), log(SBounds_global.second), 2);
+		
+		auto SrhodVdzLoverSIntegratedSpline = std::make_shared<Interpolation3DWrapper>(zGrid.data(), zGrid.size(), GammaGrid.data(), GammaGrid.size(), S_t_1.data(), S_t_1.size());
+		
+		double S_t = 0;
+		for(unsigned int j = 0; j < zGrid.size(); j++)
+		{
+			for(unsigned int k = 0; k < GammaGrid.size(); k++)
+			{
+				SrhodVdzLoverSIntegrand->SetParameters(zGrid.at(j), GammaGrid.at(k));
+				S_t = S_tIntensitySplines.at(i)->Eval(GammaGrid.at(k));
+				 
+				for(unsigned int l = 0; l < S_t_1.size(); l++) 
+				{
+					if(S_t <= SBounds_global.first) 
+						SrhodVdzLoverSIntegratedSpline->Val(j, k, l) = 0;
+					else
+					{
+						SrhodVdzLoverSIntegratedSpline->Val(j, k, l) = SrhodVdzLoverSIntegrand->Integral(log(SBounds_global.first), log(S_t/DT->S_t_1GeV * S_t_1.at(l)), 1e-3);
+					}														// renormalize S_t_1 and integrate for every grid point
+				}
+			}
+		}
+		delete SrhodVdzLoverSIntegrand;
+
+		/// Now integrate in redshift
+		auto dCdzIntegrand = new TF1(("Integrand \\int dS S^2*rho*dV/dz*L/S for " + source->Name).c_str(),
+							[SrhodVdzLoverSIntegratedSpline] (double* args, double* params) 	// args[0]: log(z)  params[0]: Gamma  params[1]: S_t_1
+							{ return exp(args[0]) *SrhodVdzLoverSIntegratedSpline->Eval(exp(args[0]), params[0], params[1]); },
+							log(zBounds_global.first), log(zBounds_global.second), 2);
+		
+		auto dCdzIntegratedSpline = std::make_shared<gsl2DInterpolationWrapper>(GammaGrid.data(), GammaGrid.size(), S_t_1.data(), S_t_1.size());
+		for(unsigned int j = 0; j < GammaGrid.size(); j++)
+		{
+			for(unsigned int k = 0; k < S_t_1.size(); k++)
+			{
+				dCdzIntegrand->SetParameters(GammaGrid.at(j), S_t_1.at(k));
+				dCdzIntegratedSpline->Val(j, k) = dCdzIntegrand->Integral(log(zGrid.at(0)), log(zGrid.at(zGrid.size()-1)), 1e-3);	// integrate in local zBounds
+			}
+		}
+		delete dCdzIntegrand;
+		dCdzIntegratedSpline->Initialize();
+		
+		if(GammaGrid.size() == 2)	// no gamma dependency, we're done
+		{
+			source->APS->at(i, i) = std::make_shared<gsl1DInterpolationWrapper>(dCdzIntegratedSpline->AlongY(GammaGrid.at(0)));
+		}
+		else 	// integrate over Gamma
+		{
+			auto dCdG = new TF1(("Integrand \\int dz \\int dS S^2*rho*dV/dz*L/S for " + source->Name).c_str(),
+								[dCdzIntegratedSpline] (double* args, double* params)	// args[0]: Gamma  params[0]: S_t_1
+								{ return dCdzIntegratedSpline->Eval(args[0], params[0]); },
+								source->GammaBounds.first, source->GammaBounds.second, 1);
+			std::vector<double> C_p; C_p.resize(S_t_1.size());
+			for(unsigned int j = 0; j < S_t_1.size(); j++)
+			{
+				dCdG->SetParameters(S_t_1.at(j), 0.);
+				C_p.at(j) = dCdG->Integral(source->GammaBounds.first, source->GammaBounds.second, 1e-3);
+				
+			}
+			delete dCdG;
+			source->APS->at(i, i) = std::make_shared<gsl1DInterpolationWrapper>(S_t_1.data(), S_t_1.size(), C_p.data());
+		}
+		if(m_log) std::cout << "(" << APSBins.at(i).first << ", " << APSBins.at(i).second << "): " << source->APS->at(i, i)->Eval(DT->S_t_1GeV) << std::endl;
+	}
+	/// calculate cross corr
+	for(unsigned int i = 0; i < APSBins.size(); i++)
+	{
+		for(unsigned int j = 0; j < i; j++)
+		{
+			source->APS->at(i, j) = std::make_shared<gsl1DInterpolationWrapper>( sqrt( *(source->APS->at(i,i).get())  *  *(source->APS->at(j,j).get())  ));
+			source->APS->at(j, i) = source->APS->at(i, j);
+		}
+	}
+	
+	
+	/*if(m_log) std::cout<< "Going into ObtaindNoverdS" << std::endl; //std::cin >> dummy;
 	std::shared_ptr<gsl2DInterpolationWrapper> dNdSSpline = ObtaindNoverdS(source, Bounds(0.1_GeV, 100._GeV), zGrid, SGrid, GammaGrid);
 	//if(m_log) dNdSSpline->print();
 	if(m_log) std::cout << "Obtaining dNdS for each energy bin" << std::endl;
@@ -161,8 +315,8 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 			source->APS->at(i, j) = std::make_shared<gsl1DInterpolationWrapper>(sqrt(*source->APS->at(i, i).get() *  *source->APS->at(j, j).get()));
 			source->APS->at(j, i) = source->APS->at(i, j); 
 		}
-	}
-	
+	}*/
+	/*
 	if(m_plot)	// plot N(>S)
 	{
 		std::vector<double> S; S.resize(20);
@@ -177,7 +331,7 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 		TGraph* g = new TGraph(N.size(), S.data(), N.data()); g->SetName(source->Name.c_str());
 		NofSFile->cd();
 		g->Write();
-	}
+	}*/
 	if(m_plot)	// plot Intensity
 	{
 		std::vector<double> IntBinMid; IntBinMid.resize(IntensityBins.size());
@@ -192,7 +346,7 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 }
 
 
-
+/*
 /// Calculates dN/dS 
 std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(AstrophysicalSource* source, Bounds EBin, const std::vector<double>& zGrid, const std::vector<double>& SGrid, const std::vector<double>& GammaGrid)
 {
@@ -206,7 +360,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(Astrophysic
 							[SoverLSpline, source] (double* args, double* params) 	// args[0]: S  params[0]: z  params[1]: Gamma
 							{	const double SoverL = SoverLSpline->Eval(params[0], params[1]); assert(SoverL<=0); const double L = args[0]/SoverL;
 								if(L > source->LumBounds.second || L < source->LumBounds.first) return 0.;
-								return source->RescaledLuminosityFunction(L, params[0], params[1])/SoverL; },
+								return source->RescaledLuminosityFunction(L, params[0], params[1])/(SoverL/9.521e48*pow(1._Mpc,2.); },
 								SBounds_global.first, SBounds_global.second, 2);
 	for(unsigned int k = 0; k < GammaGrid.size(); k++)
 	{
@@ -244,7 +398,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtaindNoverdS(Astrophysic
 	dNdSSpline->Initialize();	
 
 	return dNdSSpline;
-}										
+}		*/								
 
 /*
  * 
@@ -551,7 +705,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 		_3DPSFile->cd();
 		for(unsigned int i = 0; i < z.size(); i++)
 		{
-			auto g = _3DPowerSpectrumSpline->MakeGraphAty(z.at(i)); g->SetName((DM->Name + std::to_string(z.at(i))).c_str());		
+			auto g = _3DPowerSpectrumSpline->MakeGraphAlongX(z.at(i)); g->SetName((DM->Name + std::to_string(z.at(i))).c_str());		
 			g->Write();
 		}
 	}
