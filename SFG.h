@@ -21,7 +21,8 @@ class SFG : public AstrophysicalSource
 protected:
 	double Gamma_X;
 	double alpha;
-	double beta;
+	const double beta = 39.28;
+	const double alphatransform = 1.17;
 	double sigma;
 	double k_L1;
 	double k_L2;
@@ -29,14 +30,14 @@ protected:
 	double k_Phi1;
 	double k_Phi2;
 	double z_Phi;
-	double L_IR_0; // maybe obsolete
+	double L_IR_0; 
 	double Phi_s_0;
 	double E_cut = 0.6_GeV;
 	double k;
 	
 	SFG(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string name) : AstrophysicalSource(CM, tau, name)
 	{
-		zBounds.first = 0; zBounds.second = 6;
+		zBounds.first = 0; zBounds.second = 4;
 		GammaBounds.first = 0; GammaBounds.second = 0;
 		LumBounds.first = 1e20_ergpers; LumBounds.second = 1e52_ergpers;
 	}
@@ -51,9 +52,9 @@ public:
 	{
 		if(E*(1.+z) < E_cut)
 			return pow(1.+z, 2.-1.5);
-		if(E < E_cut  && E_cut <= E*(1+z))
+		if(E < E_cut  && E_cut <= E*(1.+z))
 			return pow(1.+z, 2.-Gamma_X) * pow(E/E_cut, 1.5 - Gamma_X);
-		return pow(1+z, 2.-Gamma_X);
+		return pow(1.+z, 2.-Gamma_X);
 	}
 	
 	double literal_F(const double E, const double z, const double Gamma) override
@@ -68,8 +69,8 @@ public:
 	
 	double LuminosityFunction(const double L, const double z) override
 	{
-		const double L_IR = 1e10*L_solar  *pow(L/1._ergpers, 1./alpha)*pow(10, -beta/alpha);
-		return k*infraredLuminosityFunction( L_IR, z)/alpha;
+		const double L_IR = 1e10*L_solar  *pow(L/1._ergpers, 1./alphatransform)*pow(10., -beta/alphatransform);
+		return k*infraredLuminosityFunction( L_IR, z)/alphatransform;
 	}
 
 protected:
@@ -96,7 +97,6 @@ public:
 	NGSFG(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("NG SFG"))
 	{
 		alpha = 1.0;
-		beta = 39.28;
 		sigma = 0.5;
 		k_L1 = 4.49;
 		k_L2 = 0.;
@@ -108,7 +108,7 @@ public:
 		L_IR_0 = pow(10, 9.78)*L_solar;		
 		Phi_s_0 = pow(10, -2.12)/pow(1._Mpc, 3);
 		
-		k = 1;
+		k = 1e3;
 	}
 	
 };
@@ -119,7 +119,6 @@ public:
 	SBSFG(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("SB SFG"))
 	{
 		alpha = 1.0;
-		beta = 39.28;
 		sigma = 0.35;
 		k_L1 = 1.96;
 		k_L2 = 0.;
@@ -131,6 +130,8 @@ public:
 		L_IR_0 = pow(10., 11.17)*L_solar;	
 		Phi_s_0 = pow(10., -4.46)/pow(1._Mpc, 3);
 		
+		
+		LumBounds.first = 1e35;
 		k = 1e3;
 	}
 	
@@ -147,7 +148,6 @@ public:
 	SFGAGN(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("SFGAGN"))
 	{
 		alpha = 1.20;
-		beta = 39.28;
 		sigma = 0.40;
 		k_L1 = 3.17;
 		k_L2 = 0.;
@@ -162,7 +162,6 @@ public:
 		
 		sbsfg = std::make_shared<SBSFG>(CM, tau);
 		ngsfg = std::make_shared<NGSFG>(CM, tau);
-		zBounds.second = 4.2;
 		redshift_dependence = {std::make_pair(Bounds(0., 0.3), 0.85), std::make_pair(Bounds(0.3, 0.45), 0.91), std::make_pair(Bounds(0.45, 0.6), 0.99),
 								std::make_pair(Bounds(0.6, 0.8), 0.87), std::make_pair(Bounds(0.8, 1.0), 0.73), std::make_pair(Bounds(1.0, 1.2), 0.32),
 								std::make_pair(Bounds(1.2, 1.7), 0.75), std::make_pair(Bounds(1.7, 2.0), 0.75), std::make_pair(Bounds(2.0, 2.5), 0.19),
@@ -172,8 +171,8 @@ public:
 
 	double literal_F(const double E, const double z, const double Gamma) override
 	{
-		double sb = sbsfg->literal_F(E, z, Gamma);
-		double ng = ngsfg->literal_F(E, z, Gamma);
+		const double sb = sbsfg->literal_F(E, z, Gamma);
+		const double ng = ngsfg->literal_F(E, z, Gamma);
 		for(unsigned int i = 0; i < redshift_dependence.size(); i++)
 		{
 			if(redshift_dependence[i].first.first < z && z <= redshift_dependence[i].first.second)  return ng*redshift_dependence[i].second + sb*(1.-redshift_dependence[i].second);
@@ -183,8 +182,8 @@ public:
 	
 	double EnergySpectrumOverK(const double E, const double z, const double Gamma) override
 	{
-		double sb = sbsfg->EnergySpectrumOverK(E, z, Gamma);
-		double ng = ngsfg->EnergySpectrumOverK(E, z, Gamma);
+		const double sb = sbsfg->EnergySpectrumOverK(E, z, Gamma);
+		const double ng = ngsfg->EnergySpectrumOverK(E, z, Gamma);
 		for(unsigned int i = 0; i < redshift_dependence.size(); i++)
 		{
 			if(redshift_dependence[i].first.first < z && z <= redshift_dependence[i].first.second)  return ng*redshift_dependence[i].second + sb*(1.-redshift_dependence[i].second);
@@ -193,7 +192,8 @@ public:
 	}
 };
 
-SFG::SFG(std::shared_ptr<SBSFG> SB, std::shared_ptr<NGSFG> NG, std::shared_ptr<SFGAGN> AGN) : SFG(SB->CM, SB->tau, std::string("SFG"))
+/// This constructor cobines all the different SFG populations into one 
+SFG::SFG(std::shared_ptr<SBSFG> SB, std::shared_ptr<NGSFG> NG, std::shared_ptr<SFGAGN> AGN) : SFG(SB->CM, SB->tau, std::string("SFG"))	
 {
 	assert(SB->Intensity.size() == NG->Intensity.size() && NG->Intensity.size() == AGN->Intensity.size());
 	assert(SB->APS->Bin1Size() == NG->APS->Bin1Size() && NG->APS->Bin1Size() == AGN->APS->Bin1Size());
