@@ -6,6 +6,9 @@
 #include "AstrophysicalSource.h"
 #include "DarkMatter.h"
 
+#include "TROOT.h"
+#include "TGraph.h"
+#include "TFile.h"
 #include <tuple>
 #include <vector>
 #include <memory>
@@ -41,7 +44,7 @@ struct AstrophysicalSourceClass
 		}
 	}
 	
-	double ScaleParameter(double& param)
+	double ScaleParameter(const double& param)
 	{
 		return parameterBounds.first + (parameterBounds.second - parameterBounds.first)*param;
 	}
@@ -70,18 +73,18 @@ protected:
 			intensity = 0;
 			for(unsigned int j =0; j < AstrophysicalSources.size(); j++)
 			{
-				intensity += pow(10, 2*parameters[j] - 1)*AstrophysicalSources[j]->Intensity[i];	// parameter is coefficient
+				intensity += pow(10, 2*parameters[j] - 1)*AstrophysicalSources.at(j)->Intensity.at(i);	// parameter is coefficient
 			}
 			int n = AstrophysicalSources.size();
 			for(unsigned int j = 0; j < dmModels.size(); j++)
 			{
-				intensity += pow(10, 10.*parameters[n+j] - 5.)*dmModels[j]->Intensity[i];
+				intensity += pow(10, 10.*parameters[n+j] - 5.)*dmModels.at(j)->Intensity.at(i);
 			}
 			n += dmModels.size();
 			for(unsigned int j = 0; j < AstrophysicalSourceClasses.size(); j++)
 			{
-				auto asc = AstrophysicalSourceClasses[j];
-				intensity += pow(10, 2*parameters[n+2*j]-1)*asc->Intensity[i]->Eval(asc->parameterBounds.first + (asc->parameterBounds.second - asc->parameterBounds.first)*parameters[n+2*j+1]);	// first parameter is coefficient, second parameter is class parameter, i.e. E_cut
+				auto asc = AstrophysicalSourceClasses.at(j);
+				intensity += pow(10, 2*parameters[n+2*j]-1)*asc->Intensity.at(i)->Eval(asc->ScaleParameter(parameters[n+2*j+1]));	// first parameter is coefficient, second parameter is class parameter, i.e. E_cut
 			}
 			chiSquared += pow( (IntensityMeasurement.at(i).first - intensity)/IntensityMeasurement.at(i).second, 2);
 		}
@@ -113,12 +116,60 @@ public:
 	{
 		std::cout << "Intensity Fit: " << std::endl;
 		for(unsigned int i = 0; i < AstrophysicalSources.size(); i++)
-			std::cout << AstrophysicalSources[i]->Name << ": " << pow(10, 2*data.lastParameters[i]-1) << std::endl;
+			std::cout << AstrophysicalSources.at(i)->Name << ": " << pow(10, 2*data.lastParameters.at(i)-1) << std::endl;
 		int n = AstrophysicalSources.size();
 		for(unsigned int i = 0; i < dmModels.size(); i++)
-			std::cout << dmModels[i]->Name << ": " << pow(10, 10.*data.lastParameters[i+n] -5.) << std::endl;
+			std::cout << dmModels.at(i)->Name << ": " << pow(10, 10.*data.lastParameters.at(i+n) -5.) << std::endl;
+		n += dmModels.size();
 		for(unsigned int i = 0; i < AstrophysicalSourceClasses.size(); i++)
-			std::cout << AstrophysicalSourceClasses[i]->Name << ": " << pow(10, 2*data.lastParameters[n+i]-1) << ",  " << AstrophysicalSourceClasses[i]->ScaleParameter(data.lastParameters[n+i+1]) << std::endl;
+			std::cout << AstrophysicalSourceClasses.at(i)->Name << ": " << pow(10, 2*data.lastParameters.at(n+2*i)-1) << ",  " << AstrophysicalSourceClasses.at(i)->ScaleParameter(data.lastParameters.at(n+2*i+1)) << std::endl;
+		std::cout << "chi^2 = " << IntensityChiSquared(data.lastParameters.data()) << std::endl;
+	}
+	
+	void plotResults(TFile* f)
+	{
+		f->cd();
+		std::vector<double> IntBinMid; IntBinMid.resize(IntensityBins.size()); for(unsigned int i = 0; i < IntensityBins.size(); i++) IntBinMid.at(i) = (IntensityBins.at(i).first + IntensityBins.at(i).second)/2.;
+		std::vector<double> Int; Int.resize(IntensityBins.size());
+		std::vector<double> IntSum; IntSum.resize(IntensityBins.size());
+		for(unsigned int i = 0; i < AstrophysicalSources.size(); i++)
+		{							// calculate E^2*I / delta E  for every energy bin individually
+			for(unsigned int j = 0; j < IntensityBins.size(); j++)	
+			{
+				Int.at(j) =pow(IntBinMid.at(j),2)/(IntensityBins.at(j).second - IntensityBins.at(j).first)* pow(10., 2*data.lastParameters.at(i)-1.) * AstrophysicalSources.at(i)->Intensity.at(j);
+				IntSum.at(j) = ( i ==0 ? Int.at(j) : Int.at(j) + IntSum.at(j));
+			}
+			auto g = new TGraph(IntBinMid.size(), IntBinMid.data(), Int.data());
+			g->SetName(("Int" + AstrophysicalSources.at(i)->Name).c_str()); g->Write();
+		}
+		int n = AstrophysicalSources.size();
+		for(unsigned int i = 0; i < dmModels.size(); i++)
+		{
+			for(unsigned int j = 0; j < IntensityBins.size(); j++)
+			{
+				Int.at(j) = pow(IntBinMid.at(j),2)/(IntensityBins.at(j).second - IntensityBins.at(j).first) * pow(10, 10.*data.lastParameters.at(i+n) -5.) * dmModels.at(i)->Intensity.at(j);
+				IntSum.at(j) += Int.at(j);
+			}			
+			auto g = new TGraph(IntBinMid.size(), IntBinMid.data(), Int.data());
+			g->SetName(("Int" + dmModels.at(i)->Name).c_str()); g->Write();
+		}
+		n += dmModels.size();
+		for(unsigned int i = 0; i < AstrophysicalSourceClasses.size(); i++)
+		{							// use the fitted second parameter
+			for(unsigned int j = 0; j < IntensityBins.size(); j++)	
+			{
+				Int.at(j) = pow(IntBinMid.at(j),2)/(IntensityBins.at(j).second - IntensityBins.at(j).first)* pow(10., 2*data.lastParameters.at(2*i+n)-1.) * 
+											AstrophysicalSourceClasses.at(i)->Intensity.at(j)->Eval(AstrophysicalSourceClasses.at(i)->ScaleParameter(data.lastParameters.at(n+2*i+1)));
+				IntSum.at(j) += Int.at(j);
+			}
+			auto g = new TGraph(IntBinMid.size(), IntBinMid.data(), Int.data());
+			g->SetName(("Int" + AstrophysicalSourceClasses.at(i)->Name).c_str()); g->Write();
+		}
+		auto gsum = new TGraph(IntBinMid.size(), IntBinMid.data(), IntSum.data());
+		gsum->SetName("IntSum"); gsum->Write();
+		std::vector<double> Intensity; Intensity.resize(IntensityBins.size()); for(unsigned int i = 0; i < IntensityBins.size(); i++) Intensity.at(i) =  pow(IntBinMid.at(i),2)/(IntensityBins.at(i).second - IntensityBins.at(i).first)* IntensityMeasurement.at(i).first;
+		auto gmeasure = new TGraph(IntBinMid.size(), IntBinMid.data(), Intensity.data());
+		gmeasure->SetName("Fermi"); gmeasure->Write();
 	}
 	
 };
@@ -196,6 +247,12 @@ public:
 	{
 		IntensityFit::printResults();
 		std::cout << "S_t = " << SBounds.first + (SBounds.second - SBounds.first)*data.lastParameters[nParameters-1] << std::endl;
+	}
+	
+	void plotResults(TFile* f)
+	{
+		IntensityFit::plotResults(f);
+		f->cd();
 	}
 	
 };
