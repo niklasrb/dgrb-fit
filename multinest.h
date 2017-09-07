@@ -30,6 +30,8 @@ double *, double *, double *, void *), void *context);
 #include <cstring>
 #include <vector>
 #include <iostream>
+#include <memory>
+#include <cassert>
 #include "Constants.h"
 
 
@@ -70,6 +72,33 @@ struct MultiNestFitData
 	 int nPar;
 };
 
+class MultiNestParameter final	// is final atm, so that the std::vector<MultiNestParameter> in the MultiNestFit class does not fall victim to object splicing 
+{
+friend class MultiNestFit;
+protected:
+	double internalMultinestParameter;	// between 0 and 1
+public:
+	std::string name;
+	Bounds bounds;
+	bool periodicBoundaryCondition;
+	double getValue()
+	{
+		return bounds.first + (bounds.second - bounds.first)*internalMultinestParameter;
+	}
+	double operator()()	{return getValue(); }	// syntactic sugar
+	// standard constructors will work
+	MultiNestParameter(Bounds bounds, std::string name = "", bool periodicBoundaryCondition = false) : name(name), bounds(bounds), periodicBoundaryCondition(periodicBoundaryCondition)
+	{
+		internalMultinestParameter = 0;
+	}
+	void print()
+	{
+		std::cout << name << ": " << getValue() << std::endl;
+	}
+};
+
+
+
 class MultiNestFit
 {
 private:
@@ -77,9 +106,9 @@ private:
 	static void _dumper(int *nSamples, int *nlive, int *nPar, double **physLive, double **posterior, double **paramConstr, double *maxLogLike, double *logZ, double *INSlogZ, double *logZerr, void *context);
 	
 protected:
-	unsigned int nParameters;
+	std::vector<MultiNestParameter> Parameters;		
 	
-	virtual double loglike(double *Cube, int *npar) = 0;
+	virtual double loglike() = 0;
 	virtual void dumper(MultiNestFitData& data) = 0;
 
 public:
@@ -102,8 +131,8 @@ MultiNestFit::MultiNestFit( std::string output = "")
 	options.mmodal = 0;					// do mode separation?
 	options.ceff = 0;					// run in constant efficiency mode?
 	options.nlive = 1000;				// number of live points
-	options.efr = 0.8;				// set the required efficiency
-	options.tol = 0.5;				// tol, defines the stopping criteria
+	options.efr = 0.5;				// set the required efficiency
+	options.tol = 0.1;				// tol, defines the stopping criteria
 	options.updInt = 1000;				// after how many iterations feedback is required & the output files should be updated
 							// note: posterior files are updated & dumper routine is called after every updInt*10 iterations
 	options.Ztol = -1E90;				// all the modes with logZ < Ztol are ignored
@@ -129,8 +158,11 @@ MultiNestFit::MultiNestFit( std::string output = "")
 
 void MultiNestFit::_loglike(double *Cube, int *n_dim, int *n_par, double *lnew, void *context)
 {
-	//for(unsigned int i = 0; i < ((MultiNestFit*)context)->parameters.size(); i++) ((MultiNestFit*)context)->parameters[i].lastValue = Cube[i];
-	*lnew = ((MultiNestFit*)context)->loglike(Cube, n_par);
+	auto mnf = ((MultiNestFit*)context);
+	assert((int)mnf->Parameters.size() == *n_dim);
+	for(unsigned int i = 0; i < mnf->Parameters.size(); i++) mnf->Parameters[i].internalMultinestParameter = Cube[i];
+	*lnew = mnf->loglike();
+	//std::cout << "lnew = " << *lnew << std::endl;
 }
 
 
@@ -157,11 +189,11 @@ MultiNestFitData& MultiNestFit::Run()
 	std::strcpy(root, options.root.c_str());
 	for(int i = std::strlen(root); i < 100; i++) root[i] = ' ';
 	
-	int nPar = (int)nParameters;
-	int ndims = nParameters;					// dimensionality (no. of free parameters)
-	int nClsPar = nParameters;				// no. of parameters to do mode separation on
-	int pWrap[nParameters];
-	for(unsigned int i = 0; i < nParameters; i++) pWrap[0]=0; //pWrap[i] = (int)parameters[i].periodicBoundaryConditions;
+	int nPar = Parameters.size();
+	int ndims = nPar;					// dimensionality (no. of free parameters)
+	int nClsPar = nPar;				// no. of parameters to do mode separation on
+	int pWrap[nPar];
+	for(unsigned int i = 0; i < Parameters.size(); i++) pWrap[i]=(int)Parameters[i].periodicBoundaryCondition; //pWrap[i] = (int)parameters[i].periodicBoundaryConditions;
 	void *context = this;				// not required by MultiNest, any additional information user wants to pass
 	
 	data.lastParameters.resize(nPar);
