@@ -45,6 +45,7 @@ protected:
 	std::shared_ptr<TFile> NofSFile;
 	std::shared_ptr<TFile> _3DPSFile;
 	std::shared_ptr<TFile> IntensityFile;
+	std::shared_ptr<TFile>  dNdEFile;
 	
 public:
 	Bounds LuminosityBounds_global;
@@ -61,7 +62,6 @@ private:
 	std::shared_ptr<CosmologyModel> CM;
 	std::shared_ptr<HaloModel> HM;
 	std::shared_ptr<Detector> DT;
-	//std::vector<Bounds> EBins;
 	
 public:	
 	
@@ -94,13 +94,11 @@ Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloMod
 		NofSFile = std::make_shared<TFile>((dir + "NofS.root").c_str(), "RECREATE");
 		_3DPSFile = std::make_shared<TFile>((dir + "3DPS.root").c_str(), "RECREATE");
 		IntensityFile = std::make_shared<TFile>((dir + "Intensity.root").c_str(), "RECREATE");
+		dNdEFile = std::make_shared<TFile>((dir + "dNdE.root").c_str(), "RECREATE");
 	}
 }
 
 
-Benchmark::~Benchmark()
-{
-}
 
 #include "Benchmarking.cpp"
 
