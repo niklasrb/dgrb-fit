@@ -90,6 +90,9 @@ void HaloModel::Init(unsigned int MLen, unsigned int zLen, unsigned int kLen, st
 	std::fstream f;
 	if(!file.empty()) f = std::fstream(file, f.out);
 	else f.setstate(std::ios_base::failbit);
+	std::cout << MBounds.first << '\t' << MBounds.second << '\t' << zBounds.first << '\t' << zBounds.second << '\t' << kBounds.first << '\t' << kBounds.second << '\n';
+	if(f.good())
+		f << MBounds.first << '\t' << MBounds.second << '\t' << zBounds.first << '\t' << zBounds.second << '\t' << kBounds.first << '\t' << kBounds.second << '\n';
 	
 	std::vector<double> M; M.resize(MLen);
 	for(unsigned int i = 0; i < MLen; i++) 
@@ -158,7 +161,7 @@ void HaloModel::CalculateMatterFluctuationVariance(const std::vector<double>& R,
 double HaloModel::f_ST(const double v)
 {
 	const double A = 0.322;  const double p = 0.3;  const double a = 0.707;
-	return A* sqrt(2*a*v/M_PI) * (1. + pow(a*v, -p)) * exp(-a*v/2.);
+	return A* sqrt(a*v/2./M_PI) * (1. + pow(a*v, -p)) * exp(-a*v/2.);
 }
 
 /// Calculates the linear Halo Bias b(m, z)
@@ -199,8 +202,8 @@ void HaloModel::CalculateHaloMassFunction(const std::vector<double>& M, const st
 	double R =0;			// useful for computation
 	std::vector<double> Sigma; Sigma.resize(M.size());
 	std::vector<double> logM; logM.resize(M.size());
-	std::vector<double> logSigma; logSigma.resize(M.size());
-	gsl1DInterpolationWrapper* LogSigmaSpline;				// because we need to interpolate the derivative
+	std::vector<double> logNu; logNu.resize(M.size());
+	gsl1DInterpolationWrapper* LogNuSpline;				// because we need to interpolate the derivative
 	
 	for(unsigned int i = 0; i < z.size(); i++)
 	{ // Interpolate log(sigma) dependent on log(m) for each z individually and use the derivative
@@ -210,18 +213,18 @@ void HaloModel::CalculateHaloMassFunction(const std::vector<double>& M, const st
 			R = pow(3*M.at(j) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.)*1._Mpc;
 			Sigma.at(j) =  sqrt(MatterFluctuationVariance(R, z.at(i))) ;  
 			logM.at(j) = log(M.at(j));
-			logSigma.at(j) = log(Sigma.at(j));
+			logNu.at(j) = log(CriticalOverdensity/Sigma.at(j))*2;
 			//std::cout << "R = " << R << "  sigma= " << Sigma.at(j) << std::endl;
 		}
 		
-		LogSigmaSpline = new gsl1DInterpolationWrapper((double*) logM.data(), logM.size(), (double*) logSigma.data());
+		LogNuSpline = new gsl1DInterpolationWrapper( logM.data(), logM.size(), logNu.data());
 		for(unsigned int j = 0; j < M.size(); j++) 
 		{
 			//std::cout << pow(CriticalOverdensity/Sigma.at(j), 2.) << '\t' << f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) << '\t' << std::abs(LogSigmaSpline->Derivative(log(M.at(j)))) << std::endl;
-			HMFSpline->Val(j, i) = CM->CriticalDensity*CM->O_m/pow(M.at(j), 2.) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogSigmaSpline->Derivative(logM.at(j)));
+			HMFSpline->Val(j, i) = DMDensity(z.at(i))/pow(M.at(j), 3) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogNuSpline->Derivative(logM.at(j)));
 		}
 		
-		delete LogSigmaSpline;
+		delete LogNuSpline;
 	}
 	HMFSpline->Initialize();
 	std::cout << "HMF: ";	HMFSpline->print();
@@ -528,6 +531,10 @@ void HaloModel::Load(std::string file)
 	std::fstream f(file, f.in);
 	assert(f.is_open());
 	
+	f >> MBounds.first >> MBounds.second >> zBounds.first >> zBounds.second >> kBounds.first >> kBounds.second;
+	MBounds.first *=1.00001; MBounds.second *=0.9999; zBounds.first *=1.00001; zBounds.second *=0.9999; kBounds.first *=1.00001; kBounds.second *=0.9999;
+	std::cout << MBounds.first << '\t' << MBounds.second << '\t' << zBounds.first << '\t' << zBounds.second << '\t' << kBounds.first << '\t' << kBounds.second << '\n';
+	
 	auto MFVSpline = std::make_shared<gsl2DInterpolationWrapper>(f);
 	MatterFluctuationVariance = [MFVSpline] (const double R, const double z) {	return MFVSpline->Eval(R, z); } ; 
 	
@@ -564,9 +571,9 @@ void HaloModel::Plot(std::string file)
 		}
 		delete []z;
 	}
-	/// Halo Mass Function
+	/// Halo Mass Function dn/dm
 	{
-		unsigned int n = 30;  double M_min = 1e-6;  double M_max = 1e12;
+		unsigned int n = 30;  double M_min = 1e4;  double M_max = 1e12;
 		double* M = new double[n];
 		for(unsigned int i =0; i < n; i++) M[i] = exp( log(M_min) + i*(log(M_max) - log(M_min))/(n-1.));
 		double* HMF = new double[n];
@@ -578,6 +585,21 @@ void HaloModel::Plot(std::string file)
 			g->Write();
 		}
 		
+		delete []M; delete []HMF;
+	}
+	/// Halo Mass Function dn/dlogm
+	{
+		unsigned int n = 30;  double M_min = 1e4;  double M_max = 1e12;
+		double* M = new double[n];
+		for(unsigned int i =0; i < n; i++) M[i] = exp( log(M_min) + i*(log(M_max) - log(M_min))/(n-1.));
+		double* HMF = new double[n];
+		std::vector<int> z = {0, 10, 20, 30};
+		for(unsigned int i = 0; i < z.size(); i++)
+		{
+			for(unsigned int j = 0; j < n; j++) HMF[j] = HaloMassFunction(M[j]*h, z[i])*h*M[j];
+			auto g = new TGraph(n, M, HMF); g->SetName(("HMFlog" + std::to_string(z[i])).c_str());
+			g->Write();
+		}
 		delete []M; delete []HMF;
 	}
 	/// NFWHaloDensityProfileFT
@@ -617,32 +639,25 @@ void HaloModel::Plot(std::string file)
 		}
 	}
 	/// Integrated Halo Mass Function  
-	/*Canvas IHMFCanvas("nCanvas", "Integrated Halo Mass Function", 1000, 1000);
-	IHMFCanvas().SetLogy(1);
-	n = 40;  z = new double[n]; for(unsigned int i = 0; i < n; i++) z[i] = i*(40.)/(n-1.);
-	int* Mthres = new int[11]; for(unsigned int i = 0; i < 11; i++) Mthres[i] = 4 + i;
-	double* IHMF = new double[n];
-	
-	TF1 _HMF("HMF", [HM] (double* args, double* params) { return exp(args[0])*HM->HaloMassFunction(h*exp(args[0]), params[0]); }, log(1e4), log(1e18), 1);
-	
-	for(unsigned int i = 0; i < 11; i++)
 	{
+		unsigned int n = 50; double* z = new double[n]; for(unsigned int i = 0; i < n; i++) z[i] = i*(40.)/(n-1.);
+		int* Mthres = new int[11]; for(unsigned int i = 0; i < 11; i++) Mthres[i] = 4 + i;
+		double* IHMF = new double[n];
 		
-		for(unsigned int j =0; j < n; j++) 
+		auto _HMF = new TF1("HMF", [this] (double* args, double* params) { return exp(args[0])*HaloMassFunction(h*exp(args[0]), params[0]); }, log(1e4), log(1e18), 1);
+		for(unsigned int i = 0; i < 11; i++)
 		{
-			_HMF.SetParameters(z[j], 0.);
-			IHMF[j] = _HMF.Integral(log(pow(10., Mthres[i])), log(1e18), 1e-4);
+			for(unsigned int j =0; j < n; j++) 
+			{
+				_HMF->SetParameters(z[j], 0.);
+				IHMF[j] = _HMF->Integral(log(pow(10., Mthres[i])), log(1e18), 1e-4);
+			}
+			auto g = new TGraph(n, z, IHMF);  g->SetName(("IntegratedHMF" + std::to_string(Mthres[i])).c_str());
+			g->Write();
 		}
-		auto IHMFGraph = new TGraph(n, z, IHMF);  IHMFGraph->SetLineColor(i+1);
-		IHMFCanvas.AddGraph(IHMFGraph, "$M_{thres}$ = 1e" + std::to_string(Mthres[i]), "L");
+		delete _HMF;
+		delete []Mthres; delete []z; 
 	}
-	IHMFCanvas.Draw("A");
-	IHMFCanvas.SetyLimits(1e-10, 1e10);
-	IHMFCanvas.SetxLimits(-1, 40);
-	IHMFCanvas().BuildLegend();
-	IHMFCanvas().SaveAs("IHMF.jpg");
-	
-	delete []Mthres; delete []z; */
 	
 	rootFile->Close();
 }
