@@ -537,7 +537,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 			p2 = P2HaloIntegrand->Integral(log(HM->MBounds.first), log(HM->MBounds.second), 1e-3);
 			_3DPowerSpectrumSpline->Val(i, j) =  p1 + pow(p2, 2)*(*(HM->Plin))(kGrid.at(i), zGrid.at(j));
 			
-			//if(m_log) std::cout << "k = " << kGrid.at(i) << "  z = " << zGrid.at(j) << "  p1 = " << p1 << "  p2 = " << p2 << std::endl;
+			if(m_log) std::cout << "k = " << kGrid.at(i) << "  z = " << zGrid.at(j) << "  p1 = " << p1 << "  p2 = " << p2 << std::endl;
 			//if(m_log) std::cout << '(' << i << ", " << j << "): " << _3DPowerSpectrumSpline->Val(i, j) << std::endl;
 		}
 	} 
@@ -557,7 +557,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 	}
 	
 	DM->APS = std::make_shared<AngularPowerSpectrum<double> >(EBins.size(), EBins.size(), Multipoles.size());
-	
+	/*
 	if(m_log) std::cout << "calculate APS crosscorelation" << std::endl;
 	TF3* APSCrossIntegrand = new TF3((std::string("Integrand WF*WF * P_ij / chi^2 for the APS of") + DM->Name).c_str(),
 								[DM, _3DPowerSpectrumSpline, this] (double* args, double *params) // args[0]:log(z) args[1]:E1  args[2]:E2   params[0]: multipole
@@ -581,7 +581,7 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 		}
 	}
 	delete APSCrossIntegrand;
-	
+	*/
 	if(m_log) std::cout << "calculate APS autocorrelation" << std::endl;
 	TF2* APSAutoIntegrand = new TF2((std::string("Integrand WF^2 * P_ij / chi^2 for the APS of") + DM->Name).c_str(),
 								[DM, _3DPowerSpectrumSpline, this] (double* args, double *params) // args[0]:log(z) args[1]:E   params[0]: multipole
@@ -599,6 +599,21 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 		}
 	}
 	delete APSAutoIntegrand;
+	
+	if(m_log) std::cout << "calculate APS crosscorrelation" << std::endl;
+	for(unsigned int i = 0 ; i < EBins.size(); i++)
+	{
+		for(unsigned int j = 0; j < i; j++)
+		{
+			for(unsigned int k = 0; k < Multipoles.size(); k++)
+			{
+				DM->APS->at(i, j, k) = sqrt(DM->APS->at(i, i,k) * DM->APS->at(j, j, k));
+				DM->APS->at(j, i, k) = DM->APS->at(i, j, k);	// use symmetry
+			}
+		}
+	}
+	
+	
 }
 
 #endif

@@ -32,8 +32,6 @@
 #include "GalaxyCatalog.h"
 #include "AngularPowerSpectrum.h"
 #include "Detector.h"
-#include "CanvasWrapper.h"
-
 
 class Benchmark
 {
