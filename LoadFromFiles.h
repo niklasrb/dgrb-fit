@@ -123,6 +123,7 @@ void LoadDGRB(std::fstream& file, std::vector<Bounds>& IntensityBins, std::vecto
 	}
 }
 
+/// Loads the whole APS
 std::shared_ptr<AngularPowerSpectrum<Measurement> > LoadAnistropy(std::string directory, int nBin, int nMul, std::vector<double>& Multipoles)
 {
 	std::string line; std::stringstream ss; double buf; Measurement m;
@@ -151,6 +152,41 @@ std::shared_ptr<AngularPowerSpectrum<Measurement> > LoadAnistropy(std::string di
 			}
 		}
 	}
+	return APS;
+}
+
+/// Only loads Cp data
+std::shared_ptr<AngularPowerSpectrum<Measurement> > LoadAnistropy(std::string filepath, int nBin)
+{
+	std::string line; std::stringstream ss;
+	std::fstream file(filepath, std::fstream::in);
+	assert(file.is_open());
+	auto APS = std::make_shared<AngularPowerSpectrum<Measurement> >(nBin, nBin, 1);
+	std::getline(file, line); // ignore first line
+	for( int i = 0; i < nBin; i++)
+	{
+		std::getline(file, line);
+		ss = std::stringstream(line);
+		for( int j = 0; j < nBin; j++)
+		{
+			ss >> APS->at(i, j, 0).first;
+		}
+	}
+	std::getline(file, line);
+	for( int i = 0; i < nBin; i++)
+	{
+		std::getline(file, line);
+		ss = std::stringstream(line);
+		for( int j = 0; j < nBin; j++)
+		{
+			ss >> APS->at(i, j, 0).second;
+		}
+	}
+	/*for(int i = 0; i < nBin; i++)
+	{
+		for( int j = 0; j <= i; j++)
+			std::cout << i << ", " << j << ": " << APS->at(i, j, 0).first << " +- " <<  APS->at(i, j, 0).second << std::endl;
+	}*/
 	return APS;
 }
 #endif
