@@ -45,11 +45,12 @@ public:
 							return std::max(0., dNdLogx->Eval(m, log10(2.*E/m))) /E; };
 		
 		WindowFunction = [this] ( const double E, const double z) 
-						{ std::cout << this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  << '\t' <<  pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) << '\t' <<  this->EnergySpectrum(E*(1.+z), z) << '\t' << exp(-(*(this->tau))(E,z)) << std::endl;
-							return this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  * pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) * this->EnergySpectrum(E*(1.+z), z) * exp(-(*(this->tau))(E,z)); };
+						{ //std::cout << this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  << '\t' <<  pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) << '\t' <<  this->EnergySpectrum(E*(1.+z), z) << '\t' << exp(-(*(this->tau))(E,z)) << std::endl;
+							return this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  * pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) * this->HM->ClumpingFactor(z) * this->EnergySpectrum(E*(1.+z), z) * exp(-(*(this->tau))(E*(1.+z),z)); };
 	
 		SourceDensityFT = [this] (const double k, const double M, const double z)
-						{ return this->HM->SourceDensitySubhaloBoostFT(k, M, z) / this->HM->ClumpingFactor(z); };
+						{ std::cout << "SDSBFT: " << this->HM->SourceDensitySubhaloBoostFT(k, M, z) << " CF: " << this->HM->ClumpingFactor(z) << std::endl;
+							return this->HM->SourceDensitySubhaloBoostFT(k, M, z) / this->HM->ClumpingFactor(z); };
 	}
 	
 	
@@ -66,7 +67,7 @@ public:
 						{ return std::max(0., dNdLogx->Eval(m, log10(E/m))) /E; };
 		
 		WindowFunction = [this] ( const double E, const double z) 
-						{  return 1. / (4.*M_PI)  * CM->O_dm * CM->CriticalDensity / (Mass*this->HalfLife)* this->EnergySpectrum(E*(1.+z), z) * exp(-(*(this->tau))(E,z)); };
+						{  return 1. / (4.*M_PI)  * CM->O_dm * CM->CriticalDensity / (Mass*this->HalfLife)* this->EnergySpectrum(E*(1.+z), z) * exp(-(*(this->tau))(E*(1.+z),z)); };
 	
 		SourceDensityFT = HM->NFWHaloDensityProfileFT;
 	}
