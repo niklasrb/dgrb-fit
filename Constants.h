@@ -14,7 +14,7 @@ constexpr  double operator "" _GeV(long double d) { return d; }
 constexpr double operator "" _photonspercm2s(long double d) { return d; }
 
 // Luminosity reference
-constexpr double operator "" _ergpers(long double d) { return d/*1e-48*/; }
+constexpr double operator "" _ergpers(long double d) { return d; }
 
 // Solar Luminosity
 const double L_solar = 3.85e33_ergpers;
