@@ -66,7 +66,7 @@ private:
 public:	
 	
 	Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloModel> HM, std::shared_ptr<Detector> DT, bool log, bool plot, std::string) ;
-	~Benchmark();
+	// standard constructors and destructors should work
 	
 	void calculateIntensityAndAPSForAstrophysicalSources(std::vector<std::shared_ptr<AstrophysicalSource> > sources);
 	void calculateIntensityAndAutocorrelationForDM(std::vector<std::shared_ptr<DarkMatter> >& DM, const std::vector<double>& Multipoles);
