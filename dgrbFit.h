@@ -79,6 +79,7 @@ class IntensityAndAPSFit : public IntensityFit
 protected:
 	std::vector<Bounds> APSBins;
 	std::shared_ptr<AngularPowerSpectrum<Measurement> > APSMeasurement;
+	std::vector<double> Multipoles;
 	
 	Bounds SBounds;
 	
@@ -91,7 +92,7 @@ protected:
 	void plotAPS(std::shared_ptr<AngularPowerSpectrum<Measurement>> APS, const double& S_t, TFile* f);
 	
 public:
-	IntensityAndAPSFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<Bounds>& APSBins, const std::shared_ptr<AngularPowerSpectrum<Measurement> >& APSMeasurement,
+	IntensityAndAPSFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<Bounds>& APSBins, const std::shared_ptr<AngularPowerSpectrum<Measurement> >& APSMeasurement, std::vector<double> Multipoles,
 	const std::vector<std::shared_ptr<AstrophysicalSource> >& AstrophysicalSources, const std::vector<std::shared_ptr<DarkMatter> >& dmModels, const std::vector<std::shared_ptr<AstrophysicalSourceClass> >& AstrophysicalSourceClasses, Bounds SBounds, std::string output);
 
 	void printResults();
@@ -296,11 +297,12 @@ void IntensityAndAPSFit::dumper(MultiNestFitData& data)
 	std::cout << "loglike: " << data.logLike << std::endl;
 }
 
-IntensityAndAPSFit::IntensityAndAPSFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<Bounds>& APSBins, const std::shared_ptr<AngularPowerSpectrum<Measurement> >& APSMeasurement,
+IntensityAndAPSFit::IntensityAndAPSFit(const std::vector<Bounds>& IntensityBins, const std::vector<Measurement>& IntensityMeasurement, const std::vector<Bounds>& APSBins, const std::shared_ptr<AngularPowerSpectrum<Measurement> >& APSMeasurement, std::vector<double> Multipoles,
 	const std::vector<std::shared_ptr<AstrophysicalSource> >& AstrophysicalSources, const std::vector<std::shared_ptr<DarkMatter> >& dmModels, const std::vector<std::shared_ptr<AstrophysicalSourceClass> >& AstrophysicalSourceClasses, Bounds SBounds, std::string output = "")
-	: IntensityFit(IntensityBins, IntensityMeasurement, AstrophysicalSources, dmModels, AstrophysicalSourceClasses, output) , APSBins(APSBins), APSMeasurement(APSMeasurement), SBounds(SBounds)
+	: IntensityFit(IntensityBins, IntensityMeasurement, AstrophysicalSources, dmModels, AstrophysicalSourceClasses, output) , APSBins(APSBins),  APSMeasurement(APSMeasurement), Multipoles(Multipoles), SBounds(SBounds)
 {
 	assert(APSBins.size() == APSMeasurement->Bin1Size()  && APSBins.size() == APSMeasurement->Bin2Size() && APSBins.size() >=2);
+	assert( APSMeasurement->MultipoleNumber() == 1  ||  APSMeasurement->MultipoleNumber() == Multipoles.size());
 	
 	Parameters.push_back(MultiNestParameter(SBounds, "S_t"));
 	options.nlive = 1500;
@@ -325,6 +327,50 @@ void IntensityAndAPSFit::plotResults(TFile* f)
 void IntensityAndAPSFit::plotAPS(std::shared_ptr<AngularPowerSpectrum<Measurement>> APS, const double& S_t, TFile* f)
 {
 	/// plot shit for each energy bin
+	for(unsigned int i = 0; i < APS->Bin1Size(); i++)
+	{
+		std::vector<double> Cl; Cl.resize(APS->MultipoleNumber());
+		std::vector<double> l; l.resize(APS->MultipoleNumber());
+		for(unsigned int j = 0; j < l.size(); j++) l.at(j) = Multipoles.at(j);
+		
+		{
+			std::vector<double> Clerr; Clerr.resize(Cl.size());
+			std::vector<double> lerr; lerr.resize(Cl.size());
+			for(unsigned int j = 0; j < Cl.size(); j++)
+			{
+				Cl.at(j) = APS->at(i, i, j).first;
+				Clerr.at(j) = APS->at(i, i, j).second;
+				lerr.at(j) = 0;
+			}
+			auto gMeas = new TGraphErrors(l.size(), l.data(), Cl.data(), lerr.data(), Clerr.data());
+			gMeas->SetName(("FermiCl" + std::to_string(i)).c_str()); gMeas->Write();
+		}
+		std::vector<double> Clsum; Clsum.resize(Cl.size()); for(unsigned int k = 0; k < Clsum.size(); k++) Clsum.at(k) = 0;
+		for(unsigned int j = 0; j < AstrophysicalSources.size(); j++)
+		{
+			for(unsigned int k = 0; k < Clsum.size(); k++) Clsum.at(k) += pow(10, Parameters.at(j)())*AstrophysicalSources.at(j)->APS->at(i, i)->Eval(S_t);
+		}
+		int n = AstrophysicalSources.size()+ dmModels.size();
+		for(unsigned int j = 0; j < AstrophysicalSourceClasses.size(); j++)
+		{
+			for(unsigned int k = 0; k < Clsum.size(); k++) Clsum.at(k) += pow(10, Parameters.at(n+2*j)()) * AstrophysicalSourceClasses.at(j)->APS->at(i, i)->Eval(S_t, Parameters.at(n+2*j+1)());
+		}
+		auto gAS = new TGraph(Clsum.size(), l.data(), Clsum.data()); 
+		gAS->SetName(("Cl" + std::to_string(i) + "AS").c_str());	gAS->Write();
+		n = AstrophysicalSources.size();
+		for(unsigned int j = 0; j < dmModels.size(); j++)
+		{
+			for(unsigned int k = 0; k < Cl.size(); k++)
+			{
+				Cl.at(k) = pow(10, 2*Parameters.at(n+j)()) * dmModels.at(j)->APS->at(i, i, k);
+				Clsum.at(k) += Cl.at(k);
+			}
+			auto g = new TGraph(l.size(), l.data(), Cl.data());
+			g->SetName(("Cl" + std::to_string(i) + dmModels.at(j)->Name).c_str()); g->Write();
+		}
+		auto gSum = new TGraph(l.size(), l.data(), Clsum.data());
+		gSum->SetName(("Cl" + std::to_string(i) + "Sum").c_str());	gSum->Write();
+	}
 }
 
 /// plots the Cp*E^4/DelaE^2 depending on the energy bin for all the sources and the observation data
