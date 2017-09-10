@@ -52,8 +52,8 @@ public:
 	void CalculateLinearHaloBias(std::vector<double>& M, std::vector<double>& z, std::ostream& out);
 	void CalculateHaloMassFunction(const std::vector<double>& M, const std::vector<double>& z, std::ostream& out);
 	void CalculateNFWHaloDensityProfileFT(const std::vector<double>& k, const std::vector<double>& M, const std::vector<double>& z, std::ostream& out); //void CalculateNFWHaloDensityProfileFT(const std::vector<double>& kr_Grid, const std::vector<double>& cGrid);
-	void CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std::vector<double>& k, std::vector<double>& z, std::ostream& out);
-	void CalculateClumpingFactor(const std::vector<double>& M, const std::vector<double>& z, std::ostream& out);
+	void CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std::vector<double>& k, std::vector<double>& z, const double subhaloBoostPrefactor, std::ostream& out);
+	void CalculateClumpingFactor(const std::vector<double>& M, const std::vector<double>& z, const double subhaloBoostPrefactor, std::ostream& out);
 	
 private:
 	struct FTIntegrandParameters;			// Needed for integration
@@ -116,8 +116,8 @@ void HaloModel::Init(unsigned int MLen, unsigned int zLen, unsigned int kLen, st
 	CalculateLinearHaloBias(M, z, f);
 	CalculateHaloMassFunction(M, z, f);
 	CalculateNFWHaloDensityProfileFT(k, M, z, f);
-	CalculateSourceDensitySubhaloBoostFT(M, k, z, f);
-	CalculateClumpingFactor(M, z, f);
+	CalculateSourceDensitySubhaloBoostFT(M, k, z, 1, f);
+	CalculateClumpingFactor(M, z, 1, f);
 }
 
 
@@ -153,7 +153,7 @@ void HaloModel::CalculateMatterFluctuationVariance(const std::vector<double>& R,
 	
 	std::cout << "MFV: "; MFVSpline->print();
 	if(out.good()) MFVSpline->Save(out);
-	MatterFluctuationVariance = [MFVSpline] (const double R, const double z)   // more redshift evolution ?
+	MatterFluctuationVariance = [MFVSpline] (const double R, const double z)  
 												{	return MFVSpline->Eval(R, z); } ; 
 }
 
@@ -202,29 +202,32 @@ void HaloModel::CalculateHaloMassFunction(const std::vector<double>& M, const st
 	double R =0;			// useful for computation
 	std::vector<double> Sigma; Sigma.resize(M.size());
 	std::vector<double> logM; logM.resize(M.size());
-	std::vector<double> logNu; logNu.resize(M.size());
-	gsl1DInterpolationWrapper* LogNuSpline;				// because we need to interpolate the derivative
-	
+	//std::vector<double> logNu; logNu.resize(M.size());
+	std::vector<double> logSigma; logSigma.resize(M.size());
+	//gsl1DInterpolationWrapper* LogNuSpline;				// because we need to interpolate the derivative
+	gsl1DInterpolationWrapper* LogSigmaSpline;
 	for(unsigned int i = 0; i < z.size(); i++)
 	{ // Interpolate log(sigma) dependent on log(m) for each z individually and use the derivative
 		
 		for(unsigned int j = 0; j < M.size(); j++) 
 		{
-			R = pow(3*M.at(j) / (4.*M_PI * CM->CriticalDensity * CM->O_m), 1./3.)*1._Mpc;
+			R = pow(3*M.at(j) / (4.*M_PI * CM->CriticalDensity*CM->O_m), 1./3.)*1._Mpc;
 			Sigma.at(j) =  sqrt(MatterFluctuationVariance(R, z.at(i))) ;  
 			logM.at(j) = log(M.at(j));
-			logNu.at(j) = log(CriticalOverdensity/Sigma.at(j))*2;
+			//logNu.at(j) = log(CriticalOverdensity/Sigma.at(j))*2;
+			logSigma.at(j) = log(Sigma.at(j));
 			//std::cout << "R = " << R << "  sigma= " << Sigma.at(j) << std::endl;
 		}
 		
-		LogNuSpline = new gsl1DInterpolationWrapper( logM.data(), logM.size(), logNu.data());
+		//LogNuSpline = new gsl1DInterpolationWrapper( logM.data(), logM.size(), logNu.data());
+		LogSigmaSpline = new gsl1DInterpolationWrapper( logM.data(), logM.size(), logSigma.data());
 		for(unsigned int j = 0; j < M.size(); j++) 
 		{
 			//std::cout << pow(CriticalOverdensity/Sigma.at(j), 2.) << '\t' << f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) << '\t' << std::abs(LogSigmaSpline->Derivative(log(M.at(j)))) << std::endl;
-			HMFSpline->Val(j, i) = DMDensity(z.at(i))/pow(M.at(j), 3) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogNuSpline->Derivative(logM.at(j)));
+			HMFSpline->Val(j, i) =CM->CriticalDensity* CM->O_m/pow(M.at(j), 2) * f_ST(pow(CriticalOverdensity/Sigma.at(j), 2.)) * std::abs(LogSigmaSpline->Derivative(logM.at(j)));
 		}
 		
-		delete LogNuSpline;
+		delete LogSigmaSpline;
 	}
 	HMFSpline->Initialize();
 	std::cout << "HMF: ";	HMFSpline->print();
@@ -248,7 +251,7 @@ double HaloModel::SubhaloBoostFactor(const double M)
 	const double b[] = { -0.442, 0.0796, -0.0025, 4.77e-6 , 4.77e-6 , -9.69e-8};
 	double sum = 0;
 	for(unsigned int i = 0; i < 6; i++) sum += b[i] * pow(log(M/1._M_solar), i);
-	return exp(sum*log(10.));
+	return pow(10, sum);
 }
 
 /// Dark Matter density for a givev redshift
@@ -301,7 +304,7 @@ void HaloModel::CalculateNFWHaloDensityProfileFT(const std::vector<double>& k, c
 		for(unsigned int j = 0; j < c.size(); j++)
 		{
 			gsl_integration_qawo_table_set_length(qawotable, c.at(j) - (j > 0 ? c.at(j-1) : 0.));	// integrate in small intervals from c[j-1] to c[j]
-			gsl_integration_qawo(&Integrand, (j>0 ? c.at(j-1) : 0.), 0, 1e-4, ws, workspace, qawotable, &res, &abserr);
+			gsl_integration_qawo(&Integrand, (j>0 ? c.at(j-1) : 0.), 0, 1e-2, ws, workspace, qawotable, &res, &abserr);
 			FTIntSpline->Val(i, j) = res;
 			if(j > 0) FTIntSpline->Val(i, j) += FTIntSpline->Val(i, j-1);
 		}
@@ -326,13 +329,13 @@ void HaloModel::CalculateNFWHaloDensityProfileFT(const std::vector<double>& k, c
 			for(unsigned int i = 0; i < k.size(); i++)
 			{
 				//std::cout << i << ", " << j << ", " << l << ": k*r_s = " << k.at(i)*r_s  <<std::endl;
-				NFWHDPFTSpline->Val( i, j, l) = M.at(j)*(log(1.+c_z) - c_z/(1.+c_z))/(k.at(i)*r_s*DMDensity(z.at(l))) * FTIntSpline->Eval(k.at(i)*r_s, c_z) ;
+				NFWHDPFTSpline->Val( i, j, l) = M.at(j)*(log(1.+c_z) - c_z/(1.+c_z))/(k.at(i)*r_s*DMDensity(0)) * FTIntSpline->Eval(k.at(i)*r_s, c_z) ;
 			}
 		}
 	}
 	if(out.good()) NFWHDPFTSpline->Save(out);
 	NFWHaloDensityProfileFT = [NFWHDPFTSpline] (const double k, const double M, const double z)
-												{ /*std::cout << "NFWHDPFTSpline: " << k << ", " << M << ", " << z << std::endl;*/ return NFWHDPFTSpline->Eval(k, M, z); } ; 
+												{  return NFWHDPFTSpline->Eval(k, M, z); } ; 
 	/*
 	Bounds rBounds; rBounds.first = pow(3*M[0] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.);
 	rBounds.second = pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.);
@@ -382,21 +385,19 @@ double HaloModel::NFWHaloDensityProfile(const double r, const double M, const do
 
 
 ///Calculates the Fourier transform of the Source Density with a subhalo boost
-void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std::vector<double>& k, std::vector<double>& z, std::ostream& out)
+void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std::vector<double>& k, std::vector<double>& z, const double subhaloBoostPrefactor, std::ostream& out)
 {
 	// we need a different r grid
 	std::vector<double> r; r.resize(M.size());
-	Bounds rBounds; rBounds.first = pow(3*M[0] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.)*1e-1;
-	rBounds.second = pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.)*1e1;
+	Bounds rBounds; rBounds.first = pow(3*M[0] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.)*0.9999_Mpc;
+	rBounds.second = pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.)*1.00001_Mpc;
 	
 	for(unsigned int i = 0; i < r.size(); i++) r[i] = exp( log(rBounds.first) + i*(log(rBounds.second) - log(rBounds.first))/(r.size()-1.) );
 	
 	
 	auto NFWIntegrand = std::make_shared<TF1>("NFW halo density ^2", 
 												[this] ( double* args, double* params) // args[0]: log(r)  params[0]: M  params[1]: z
-												{	const double nfw = NFWHaloDensityProfile(exp(args[0]), params[0], params[1]);
-													//std::cout << exp(args[0]) << '\t' << nfw << '\t' << DMDensity(params[1]) << '\t' << pow(nfw/DMDensity(params[1]), 2.) << std::endl;
-													return exp(args[0])*pow(nfw/DMDensity(params[1]), 2.);	},
+												{	return exp(args[0])*pow(NFWHaloDensityProfile(exp(args[0]), params[0], params[1])/DMDensity(params[1]), 2.);	},
 													log(rBounds.first),  log(rBounds.second), 2);	
 	
 	auto SourceDensityWithSubhaloBoost = std::make_shared<Interpolation3DWrapper>(r.data(), r.size(), M.data(), M.size(), z.data(), z.size());
@@ -408,14 +409,12 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std
 		for(unsigned int l = 0; l < z.size(); l++)  
 		{
 			NFWIntegrand->SetParameters(M.at(i), z.at(l));
-			//std::cout << 3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))) << '\t' << log(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l)))) << std::endl;
-			NFWsqIntegrated = NFWIntegrand->Integral(log(rBounds.first), log(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))))/3., 1e-4);
+			NFWsqIntegrated = NFWIntegrand->Integral(log(rBounds.first), log(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(l))))/3., 1e-3);
 			
 			for(unsigned int j = 0; j < r.size(); j++)
 			{				
-				SourceDensityWithSubhaloBoost->Val(j, i, l) = pow(NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/DMDensity(z.at(l)), 2) + 
-												SubhaloBoostFactor(M.at(i))* NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/M.at(i) * NFWsqIntegrated;
-				//std::cout << M.at(i) << '\t' << r.at(j) << '\t' << z.at(l) << '\t' << SourceDensityWithSubhaloBoost->Val(j, i, l) << std::endl;
+				SourceDensityWithSubhaloBoost->Val(j, i, l) = pow(NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/DMDensity(0/*z.at(l)*/), 2) + 
+												subhaloBoostPrefactor*SubhaloBoostFactor(M.at(i))* NFWHaloDensityProfile(r.at(j), M.at(i), z.at(l))/M.at(i) * NFWsqIntegrated;
 			}																													// Integrate to r_vir
 		}
 	}
@@ -445,7 +444,7 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std
 			for(unsigned int l = 0; l < z.size(); l++)
 			{
 				params.z = z.at(l);
-				gsl_integration_cquad(&Integrand, log(rBounds.first*1e1), log(3.*M.at(i) /(4.*M_PI*VirialOverdensity*DMDensity(z.at(l))))/3., 0, 1e-4, cquadws, &res, &abserr, NULL);
+				gsl_integration_cquad(&Integrand, log(rBounds.first*1e1), log(3.*M.at(i) /(4.*M_PI*VirialOverdensity*DMDensity(z.at(l))))/3., 0, 1e-2, cquadws, &res, &abserr, NULL);
 				//std::cout << "(" << i << ", " << j << ", " << l << "): " << res << std::endl;
 				SDSBSpline->Val(i, j, l) = res;
 			}
@@ -458,38 +457,17 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std
 									{  return SDSBSpline->Eval(M, k, z); };
 }
 
-/*
-	auto FTIntegrand = std::make_shared<TF1>("Integrand f(r)*r*sin(kr)/k for FT",
-										[SourceDensityWithSubhaloBoost] (double* args, double* params) //args[0]:log(r)  params[0]:k  params[1]: M  params[2]: z
-										{	return SourceDensityWithSubhaloBoost->Eval(exp(args[0]), params[1], params[2])*exp(2*args[0]) * sin(params[0]*exp(args[0]))/params[0]; },
-										log(rBounds.first), log(rBounds.second), 3);
-	
-	auto SDSBSpline = std::make_shared<Interpolation3DWrapper>(M.data(), M.size(), k.data(), k.size(), z.data(), z.size());
-	
-	for(unsigned int i = 0; i < M.size(); i++)
-	{
-		for(unsigned int j = 0; j < k.size(); j++)
-		{
-			for(unsigned int l = 0; l < z.size(); l++)
-			{
-				FTIntegrand->SetParameters(k.at(j), M.at(i), z.at(l));
-				//std::cout << k.at(j) << '\t' << M.at(i) << '\t' << z.at(l) << '\t' << pow(3.*M.at(i) /(4.*M_PI*VirialOverdensity*DMDensity(z.at(l))), 1./3.) << std::endl;
-				SDSBSpline->Val(i, j, l) = 4*M_PI * FTIntegrand->Integral(log(rBounds.first), log(3.*M.at(i) /(4.*M_PI*VirialOverdensity*DMDensity(z.at(l))))/3. , 1e-4);
-				//std::cout << SDSBSpline->Val(i, j, l) << std::endl;
-			}
-		}
-	}*/
+
 
 /// Calculates the clumping factor 
-void HaloModel::CalculateClumpingFactor(const std::vector<double>& M, const std::vector<double>& z, std::ostream& out)
+void HaloModel::CalculateClumpingFactor(const std::vector<double>& M, const std::vector<double>& z, const double subhaloBoostPrefactor, std::ostream& out)
 {
-	Bounds rBounds; rBounds.first = pow(3*M[0] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.)*1e-1;
-	rBounds.second = pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.)*1e1;
+	Bounds rBounds; rBounds.first = pow(3*M[0] /(4*M_PI*VirialOverdensity*DMDensity(z[z.size()-1])), 1./3.)*0.9999_Mpc;
+	rBounds.second = pow(3*M[M.size()-1] /(4*M_PI*VirialOverdensity*DMDensity(z[0])), 1./3.)*1.00001_Mpc;
 	
 	auto NFWIntegrand = std::make_shared<TF1>("NFW halo density ^2", 
 												[this] ( double* args, double* params) // args[0]: log(r)  params[0]: M  params[1]: z
-												{	const double nfw = NFWHaloDensityProfile(exp(args[0]), params[0], params[1]);
-													return exp(args[0])*pow(nfw/DMDensity(params[1]), 2.);	},
+												{	return exp(args[0])*pow(NFWHaloDensityProfile(exp(args[0]), params[0], params[1])/DMDensity(/*params[1]*/0), 2.);	},
 													log(rBounds.first),  log(rBounds.second), 2);	
 													
 	auto NFWsqIntegrated = std::make_shared<gsl2DInterpolationWrapper>(M.data(), M.size(), z.data(), z.size());
@@ -498,24 +476,23 @@ void HaloModel::CalculateClumpingFactor(const std::vector<double>& M, const std:
 		for(unsigned int j = 0; j < z.size(); j++)
 		{
 			NFWIntegrand->SetParameters(M.at(i), z.at(j));
-			NFWsqIntegrated->Val(i, j) = NFWIntegrand->Integral(log(rBounds.first),  log(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(j))))/3., 1e-4);
+			NFWsqIntegrated->Val(i, j) = NFWIntegrand->Integral(log(rBounds.first),  log(3*M.at(i) /(4*M_PI*VirialOverdensity*DMDensity(z.at(j))))/3., 1e-3);
 		}
 	}
 	NFWsqIntegrated->Initialize();
 	std::cout << "NFWsq "; NFWsqIntegrated->print();
 	
-	
 	auto Integrand = std::make_shared<TF1>("Integrand dn/dm (1+b_sub) Integral(NFW^2)",
-											[NFWsqIntegrated, this] (double* args, double* params) // args[0]: log(M)  params[0]: z
+											[NFWsqIntegrated, this, subhaloBoostPrefactor] (double* args, double* params) // args[0]: log(M)  params[0]: z
 											{	//double NFW = NFWsqIntegrated->Eval(exp(args[0]), params[0]);
 												//std::cout << exp(args[0]) << '\t' << HaloMassFunction(exp(args[0]), params[0]) << '\t' << (1.+ SubhaloBoostFactor(exp(args[0]))) << '\t' << NFW << std::endl;
-												return exp(args[0])*HaloMassFunction(exp(args[0]), params[0])*(1.+ SubhaloBoostFactor(exp(args[0])))*NFWsqIntegrated->Eval(exp(args[0]), params[0]); }, 
+												return exp(args[0])*HaloMassFunction(exp(args[0]), params[0])*(1.+ subhaloBoostPrefactor*SubhaloBoostFactor(exp(args[0])))*NFWsqIntegrated->Eval(exp(args[0]), params[0]); }, 
 												log(MBounds.first), log(MBounds.second), 1);
 	std::vector<double> CF;  CF.resize(z.size());
 	for(unsigned int i = 0; i < z.size(); i++)
 	{
 		Integrand->SetParameters(z.at(i), 0);
-		CF.at(i) = Integrand->Integral(log(MBounds.first), log(MBounds.second), 1e-4);
+		CF.at(i) = Integrand->Integral(log(MBounds.first), log(MBounds.second), 1e-3);
 	}
 	auto CFSpline = std::make_shared<gsl1DInterpolationWrapper>( z.data(), z.size(), CF.data());
 	std::cout << "CF: "; CFSpline->print();
@@ -530,7 +507,8 @@ void HaloModel::Load(std::string file)
 {
 	std::fstream f(file, f.in);
 	assert(f.is_open());
-	
+	// load and change Bounds, otherwise the crappy 3D interpolation algorithm will throw an error because of numerics
+	// this should not change the physics though
 	f >> MBounds.first >> MBounds.second >> zBounds.first >> zBounds.second >> kBounds.first >> kBounds.second;
 	MBounds.first *=1.00001; MBounds.second *=0.9999; zBounds.first *=1.00001; zBounds.second *=0.9999; kBounds.first *=1.00001; kBounds.second *=0.9999;
 	std::cout << MBounds.first << '\t' << MBounds.second << '\t' << zBounds.first << '\t' << zBounds.second << '\t' << kBounds.first << '\t' << kBounds.second << '\n';
