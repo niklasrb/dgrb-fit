@@ -66,13 +66,11 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 	assert(zGrid.size() >= 2);
 	assert(GammaGrid.size() >= 2);
 	assert(SGrid.size() >= 2);	  
-	
-	//std::string dummy;
 
 	if(m_log) std::cout << "Going into ObtainEffectiveEnergySpectrum" << std::endl;
 	std::shared_ptr<gsl2DInterpolationWrapper> dNdESpline = ObtainEffectiveEnergySpectrum(source, EGrid, zGrid, GammaGrid);
 	if(m_log) dNdESpline->print();
-	if(m_log) std::cout<< "Going into ObtainFluxThreshold" << std::endl; //std::cin >> dummy;
+	if(m_log) std::cout<< "Going into ObtainFluxThreshold" << std::endl;
 	std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > S_tIntensitySplines = ObtainFluxThreshold(source, IntensityBins, GammaGrid, dNdESpline);
 	//if(m_log) S_tIntensitySpline->print();
 	std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > S_tAPSSplines = ObtainFluxThreshold(source, APSBins, GammaGrid, dNdESpline);

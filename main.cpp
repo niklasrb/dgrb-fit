@@ -94,9 +94,9 @@ int main(int argc, char** argv)
 	
 	return 0;
 	
-	AstrophysicalSources.erase(AstrophysicalSources.begin() + 1 , AstrophysicalSources.end());	// delete SFG elements
+	AstrophysicalSources.erase(AstrophysicalSources.begin() + 4 , AstrophysicalSources.end());	// delete SFG elements
 	AstrophysicalSources.push_back(std::make_shared<SFG>(SB, NG, AGN));						// and add combination
-	 
+	 /*
 	/// test dependency on E_cut for FSRQ
 	std::vector<double> FSRQE_cut = {2.5, 12.5, 22.5, 32.5, 42.5, 52.5, 62.5};
 	std::vector<std::shared_ptr<AstrophysicalSource> > FSRQs;
@@ -123,16 +123,16 @@ int main(int argc, char** argv)
 	
 	ASC.push_back(std::make_shared<AstrophysicalSourceClass>(IntensityBins, APSBins, LISPs, LISPE_cut, "LISP"));
 	//AstrophysicalSources.erase(AstrophysicalSources.begin() + 1);
-	
+	*/
 	
 	/// add dark matter models
 	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 10, 1.4e17)); dmModels.at(0)->Name = "M=10GeV";
 	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 100, 1.4e17)); dmModels.at(1)->Name = "M=100GeV";
-	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 1000, 1.4e17)); dmModels.at(2)->Name = "M=1TeV";
+	dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 1000, 1.4e17)); dmModels.at(2)->Name = "M=1TeV";
 	
-	//dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, dNdLogx, 10, 3e-26));
+	dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, dNdLogx, 10, 3e-26));
 	
-	//B.calculateIntensityAndAutocorrelationForDM(dmModels, Multipoles);
+	B.calculateIntensityAndAutocorrelationForDM(dmModels, Multipoles);
 	
 	//return 0;	
 	/*
@@ -147,12 +147,12 @@ int main(int argc, char** argv)
 	IAF->printResults();
 	auto f = new TFile("plots/apsfit.root", "RECREATE"); IAF->plotResults(f); delete f;
 	*/
-	/*
+	
 	auto IAPSF = std::make_shared<IntensityAndAPSFit>(IntensityBins, DGRBIntensity, APSBins, _2FGLAPS, Multipoles, AstrophysicalSources, dmModels,  ASC, Bounds(3e-10, 6e-10), "fits/intapsfit/all");
 	IAPSF->Run();
 	IAPSF->printResults();
 	auto f2 = new TFile("plots/apsfitall.root", "RECREATE"); IAPSF->plotResults(f2); delete f2;
-	*/
+	
 	return 0;
 }
 

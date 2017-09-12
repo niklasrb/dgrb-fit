@@ -583,32 +583,6 @@ gsl2DInterpolationWrapper gsl2DInterpolationWrapper::Combine(const std::vector<s
 
 /// 3D interpolation
 
-class Interpolation3DWrapper
-{
-protected:
-double* x; unsigned int n_x; 
-double* y; unsigned int n_y; 
-double* z; unsigned int n_z; 
-double* f;
-
-double interp(const double& _x, const double& _y, const double& _z);	// no bounds checking!
-double extrap(const double& _x, const double& _y, const double& _z);
-double& access(unsigned int i, unsigned int j, unsigned int k);			// no bounds checking!
-
-public:
-
-Interpolation3DWrapper(const double* _x,unsigned int n_x, const double* _y, unsigned int n_y, const double* z,unsigned int n_z);
-Interpolation3DWrapper(std::istream& in);
-Interpolation3DWrapper(const Interpolation3DWrapper& iw);
-~Interpolation3DWrapper();
-Interpolation3DWrapper& operator =(const Interpolation3DWrapper& iw);
-double& Val(unsigned int i, unsigned int j, unsigned int k);			// with bounds checking
-double Eval(const double& _x, const double& _y, const double& _z);		// with bounds checking
-void print();
-void Save(std::ostream& o);
-
-};
-
 Interpolation3DWrapper::Interpolation3DWrapper(const double* _x,unsigned int n_x, const double* _y,unsigned int n_y, const double* _z,unsigned int n_z) : n_x(n_x), n_y(n_y), n_z(n_z)
 {
 	assert(n_x > 1 && n_y > 1 && n_z > 1);
