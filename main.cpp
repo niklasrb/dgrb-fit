@@ -1,9 +1,6 @@
 #include "Benchmarking.h"
 #include "LoadFromFiles.h"
-#include "TApplication.h"
 #include "TFile.h"
-#include "TF1.h"
-#include "CanvasWrapper.h"
 #include "dgrbFit.h"
 
 
@@ -36,9 +33,8 @@ int main(int argc, char** argv)
 		PkFiles.push_back(std::fstream(data + "LinearMatterPowerSpectrum/" + "honey_z" + std::to_string(i) + "_pk.dat", std::fstream::in));
 	auto Plin = LoadLinearMatterPowerSpectrum(PkFiles);
 	if(plot) Plin->plot("plots/LMPS.root");
-	//Plin->print();
 	
-	// Load N of log(x) for DM
+	// Load dN/dlogX for DM
 	std::fstream dmEnergySpectrum(data + "AtProduction_gammas.dat", std::fstream::in);
 	auto dNdLogx = LoaddNdLogx(dmEnergySpectrum);
 	//dNdLogx->print();
@@ -55,15 +51,15 @@ int main(int argc, char** argv)
 									Bounds(1.99_GeV, 3.15_GeV), Bounds(3.15_GeV, 5.0_GeV), Bounds(5.0_GeV, 7.23_GeV), Bounds(7.23_GeV, 10.24_GeV), 
 									Bounds(10.24_GeV, 21.83_GeV), Bounds(21.83_GeV, 50.0_GeV), Bounds(50.0_GeV, 95.27_GeV), Bounds(95.27_GeV, 199.05_GeV),
 									Bounds(199.05_GeV, 500.0_GeV)  };
-	auto DGRBAPS = LoadAnistropy(data + "Anisotropy2FGL/", 13,  20, Multipoles);
+	auto _2FGLAPS = LoadAnistropy(data + "Anisotropy2FGL/", 13,  20, Multipoles);	// these are the whole Cl data
+	auto _2FGLCp = LoadAnistropy(data + "Anisotropy2FGL/Cp.txt", 13);				// this is Cp data
 	
 	// Prepare the Halo Model
-	auto HM = std::make_shared<HaloModel>(CM, Plin, Bounds(1e-6_M_solar, 1e18_M_solar), Bounds(1e-3, 50.), Bounds(1e-3/1._Mpc, 1e4/1._Mpc));
-	HM->Init(50, 50, 100, data + "HM.dat");
-	HM->Load(data + "HM.dat");
+	auto HM = std::make_shared<HaloModel>(CM, Plin, Bounds(1e-6_M_solar, 1e18_M_solar), Bounds(9e-4, 50.), Bounds(9e-4/1._Mpc, 2e4/1._Mpc));
+	HM->Init(50, 50, 100, data + "HM.dat");			// recalculate from scratch and save in file
+	//HM->Load(data + "HM.dat");							// load from file
 	
 	if(plot) HM->Plot("plots/HM.root");
-	//return 0;
 	
 	// Detector
 	auto DT = std::make_shared<FermiLAT>();
@@ -90,13 +86,15 @@ int main(int argc, char** argv)
 	AstrophysicalSources.push_back(std::make_shared<FSRQ>(CM, tau));
 	AstrophysicalSources.push_back(std::make_shared<LISP>(CM, tau));
 	AstrophysicalSources.push_back(std::make_shared<HSP>(CM, tau));
-	auto SB = std::make_shared<SBSFG>(CM,tau); AstrophysicalSources.push_back(SB);
-	auto NG = std::make_shared<NGSFG>(CM,tau); AstrophysicalSources.push_back(NG);
-	auto AGN = std::make_shared<SFGAGN>(CM,tau); AstrophysicalSources.push_back(AGN);
+	auto SB = std::make_shared<SBSFG>(CM, tau); AstrophysicalSources.push_back(SB);
+	auto NG = std::make_shared<NGSFG>(CM, tau); AstrophysicalSources.push_back(NG);
+	auto AGN = std::make_shared<SFGAGN>(CM, tau); AstrophysicalSources.push_back(AGN);
 	/// calculate intensity and anisotropy for them
 	B.calculateIntensityAndAPSForAstrophysicalSources(AstrophysicalSources);
 	
-	AstrophysicalSources.erase(AstrophysicalSources.begin() + 4, AstrophysicalSources.end());	// delete SFG elements
+	return 0;
+	
+	AstrophysicalSources.erase(AstrophysicalSources.begin() + 1 , AstrophysicalSources.end());	// delete SFG elements
 	AstrophysicalSources.push_back(std::make_shared<SFG>(SB, NG, AGN));						// and add combination
 	 
 	/// test dependency on E_cut for FSRQ
@@ -106,24 +104,55 @@ int main(int argc, char** argv)
 	B.calculateIntensityAndAPSForAstrophysicalSources(FSRQs);
 	
 	ASC.push_back(std::make_shared<AstrophysicalSourceClass>(IntensityBins, APSBins, FSRQs, FSRQE_cut, "FSRQ"));
-	AstrophysicalSources.erase(AstrophysicalSources.begin() + 1);
+	//AstrophysicalSources.erase(AstrophysicalSources.begin() + 1);
+	
+	/// test dependency on E_cut for HSP
+	std::vector<double> HSPE_cut = {100., 300., 500., 700., 900., 1100., 1500., 2000., 2600.};
+	std::vector<std::shared_ptr<AstrophysicalSource> > HSPs;
+	for(unsigned int i = 0; i < HSPE_cut.size(); i++) { HSPs.push_back(std::make_shared<HSP>(CM, tau, HSPE_cut.at(i))); HSPs.at(i)->Name += std::to_string(HSPE_cut.at(i)); }
+	B.calculateIntensityAndAPSForAstrophysicalSources(HSPs);
+	
+	ASC.push_back(std::make_shared<AstrophysicalSourceClass>(IntensityBins, APSBins, HSPs, HSPE_cut, "HSP"));
+	//AstrophysicalSources.erase(AstrophysicalSources.begin() + 1);
+	
+	/// test dependency on E_cut for LISP
+	std::vector<double> LISPE_cut = {20, 30, 40, 50, 60, 70, 80};
+	std::vector<std::shared_ptr<AstrophysicalSource> > LISPs;
+	for(unsigned int i = 0; i < LISPE_cut.size(); i++) { LISPs.push_back(std::make_shared<LISP>(CM, tau, LISPE_cut.at(i))); LISPs.at(i)->Name += std::to_string(LISPE_cut.at(i)); }
+	B.calculateIntensityAndAPSForAstrophysicalSources(LISPs);
+	
+	ASC.push_back(std::make_shared<AstrophysicalSourceClass>(IntensityBins, APSBins, LISPs, LISPE_cut, "LISP"));
+	//AstrophysicalSources.erase(AstrophysicalSources.begin() + 1);
+	
 	
 	/// add dark matter models
-	dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 10, 1.4e17));
-	dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, dNdLogx, 10, 3e-26));
+	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 10, 1.4e17)); dmModels.at(0)->Name = "M=10GeV";
+	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 100, 1.4e17)); dmModels.at(1)->Name = "M=100GeV";
+	//dmModels.push_back(std::make_shared<DecayingDM>(CM, HM, tau, dNdLogx, 1000, 1.4e17)); dmModels.at(2)->Name = "M=1TeV";
 	
-	B.calculateIntensityAndAutocorrelationForDM(dmModels, Multipoles);
+	//dmModels.push_back(std::make_shared<AnnihilatingDM>(CM, HM, tau, dNdLogx, 10, 3e-26));
+	
+	//B.calculateIntensityAndAutocorrelationForDM(dmModels, Multipoles);
 	
 	//return 0;	
-	
-	auto IF = std::make_shared<IntensityFit>(IntensityBins, DGRBIntensity, AstrophysicalSources, dmModels, ASC, "fit/ifit.dat") ;
+	/*
+	auto IF = std::make_shared<IntensityFit>(IntensityBins, DGRBIntensity, AstrophysicalSources, dmModels, ASC, "fits/intfit/intfitase") ;
 	IF->Run();
 	IF->printResults();
-	auto f = new TFile("plots/intfit.root", "RECREATE"); IF->plotResults(f); delete f;
-	
-	auto IAF = std::make_shared<IntensityAndAPSFit>(IntensityBins, DGRBIntensity, APSBins, DGRBAPS, AstrophysicalSources, dmModels,  ASC, Bounds(1e-10, 4e-10), "fit/iafit.dat");
+	auto f = new TFile("plots/intfitase.root", "RECREATE"); IF->plotResults(f); delete f;
+	*/
+	/*
+	auto IAF = std::make_shared<IntensityAndAPSFit>(IntensityBins, DGRBIntensity, APSBins, _2FGLCp, std::vector<double>(), AstrophysicalSources, dmModels,  ASC, Bounds(3e-10, 6e-10), "fits/intapsfit/as");
 	IAF->Run();
 	IAF->printResults();
+	auto f = new TFile("plots/apsfit.root", "RECREATE"); IAF->plotResults(f); delete f;
+	*/
+	/*
+	auto IAPSF = std::make_shared<IntensityAndAPSFit>(IntensityBins, DGRBIntensity, APSBins, _2FGLAPS, Multipoles, AstrophysicalSources, dmModels,  ASC, Bounds(3e-10, 6e-10), "fits/intapsfit/all");
+	IAPSF->Run();
+	IAPSF->printResults();
+	auto f2 = new TFile("plots/apsfitall.root", "RECREATE"); IAPSF->plotResults(f2); delete f2;
+	*/
 	return 0;
 }
 

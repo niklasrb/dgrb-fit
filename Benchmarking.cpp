@@ -2,7 +2,15 @@
 #define BENCHMARKING_CPP
 
 #include "Benchmarking.h"
-/// Prepare the Grids for each AstrophysicalSource and then calculate for each individually
+/* Input:
+ * 	A list with pointers to AstrophysicalSource objects
+ * 
+ * The function initiates the grids on which the calculations will be performed
+ *  depending on the class options and the source in question
+ * It is then passed on to perform the actual calculations
+ * 
+ * 
+ */
 void Benchmark::calculateIntensityAndAPSForAstrophysicalSources(std::vector<std::shared_ptr<AstrophysicalSource> > sources)
 {
 	if(sources.size() == 0) return;
@@ -44,7 +52,13 @@ void Benchmark::calculateIntensityAndAPSForAstrophysicalSources(std::vector<std:
 	}
 }
 
-/// Calculate the Intensity and Autocorrelation for an individual Astrophysical Source
+/* Calculates the Intensity and Cp for a given Astrophysical source
+ * Input:
+ * 	A pointer to the AstrophysicalSource object
+ *  A grid in Energy, flux, redshift and photon index
+ *  
+ *  The calculations will be performed on these grids and the results saved in the AstrophysicalSource object
+ */
 void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std::vector<double>& EGrid, const std::vector<double>& SGrid, const std::vector<double>& zGrid, const std::vector<double>& GammaGrid)
 {
 	assert(source != NULL);
@@ -253,7 +267,7 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 		if(GammaGrid.size() == 2) g = rhodVdzLoverSIntegratedSpline->MakeGraphAlongX(GammaGrid[0]);
 		else
 		{
-			auto integ = new TF1(("Integrand dS/dG for " + source->Name).c_str(),
+			auto integ = new TF1(("Integrand dN/dG for " + source->Name).c_str(),
 							[rhodVdzLoverSIntegratedSpline] (double* args, double* params)	// args[0]: Gamma   params[0]: S
 							{ return rhodVdzLoverSIntegratedSpline->Eval(params[0], args[0]); },
 							source->GammaBounds.first, source->GammaBounds.second, 1);
@@ -279,6 +293,16 @@ void Benchmark::calculateIntensityAndAPS(AstrophysicalSource* source, const std:
 		TGraph* g = new TGraph(IntensityBins.size(), IntBinMid.data(), ScaledInt.data()); g->SetName(source->Name.c_str());
 		IntensityFile->cd();
 		g->Write();
+	}
+	if(m_plot)	// plot Cp
+	{
+		std::vector<double> Cp; Cp.resize(APSBins.size());
+		std::vector<double> APSBinMid; for(unsigned int i = 0; i < APSBins.size(); i++) APSBinMid.push_back((APSBins.at(i).first + APSBins.at(i).second)/2.);
+		for(unsigned int j = 0; j < APSBins.size(); j++)	
+				Cp.at(j) = pow(APSBinMid.at(j), 4)/pow(APSBins.at(j).second - APSBins.at(j).first, 2) * source->APS->at(j, j)->Eval(DT->S_t_1GeV);  
+		auto g = new TGraph(APSBins.size(), APSBinMid.data(), Cp.data());
+		AnisotropyFile->cd();
+		g->SetName(("Cp" + source->Name).c_str()); g->Write();
 	}
 	
 }
@@ -455,7 +479,9 @@ std::shared_ptr<gsl2DInterpolationWrapper> Benchmark::ObtainEffectiveEnergySpect
 	
 	if(m_plot)
 	{
-		auto g = dNdESpline->MakeGraphAlongX((source->GammaBounds.first + source->GammaBounds.second)/2.);  g->SetName(source->Name.c_str());
+		std::vector<double> EsqdNdE; EsqdNdE.resize(EGrid.size());
+		for(unsigned int i = 0; i < EGrid.size(); i++) EsqdNdE.at(i) = pow(EGrid.at(i), 2)*dNdESpline->Eval(EGrid.at(i), (source->GammaBounds.first + source->GammaBounds.second)/2.);
+		auto g = new TGraph(EGrid.size(), EGrid.data(), EsqdNdE.data()) ;  g->SetName(source->Name.c_str());
 		dNdEFile->cd();
 		g->Write();
 	}
@@ -612,7 +638,20 @@ void Benchmark::calculateAPSForDM(std::shared_ptr<DarkMatter>& DM, const std::ve
 			}
 		}
 	}
-	
+	if(m_plot)
+	{
+		AnisotropyFile->cd();
+		for(unsigned int i = 0; i < APSBins.size(); i++)
+		{
+			std::vector<double> Cl; Cl.resize(Multipoles.size());			
+			for(unsigned int k = 0; k < Cl.size(); k++)
+			{
+				Cl.at(k) = DM->APS->at(i, i, k);
+			}
+			auto g = new TGraph(Multipoles.size(), Multipoles.data(), Cl.data());
+			g->SetName(("Cl" + std::to_string(i) + DM->Name).c_str()); g->Write();
+		}
+	}
 	
 }
 

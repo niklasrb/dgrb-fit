@@ -44,6 +44,7 @@ protected:
 	std::shared_ptr<TFile> _3DPSFile;
 	std::shared_ptr<TFile> IntensityFile;
 	std::shared_ptr<TFile>  dNdEFile;
+	std::shared_ptr<TFile> AnisotropyFile;
 	
 public:
 	Bounds LuminosityBounds_global;
@@ -93,6 +94,7 @@ Benchmark::Benchmark(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<HaloMod
 		_3DPSFile = std::make_shared<TFile>((dir + "3DPS.root").c_str(), "RECREATE");
 		IntensityFile = std::make_shared<TFile>((dir + "Intensity.root").c_str(), "RECREATE");
 		dNdEFile = std::make_shared<TFile>((dir + "dNdE.root").c_str(), "RECREATE");
+		AnisotropyFile = std::make_shared<TFile>((dir + "Anisotropy.root").c_str(), "RECREATE");
 	}
 }
 

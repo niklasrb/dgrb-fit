@@ -124,7 +124,7 @@ double IntensityFit::IntensityChiSquared()
 		}
 		chiSquared += pow( (IntensityMeasurement.at(i).first - intensity)/IntensityMeasurement.at(i).second, 2);
 	}
-	return chiSquared/IntensityBins.size();
+	return chiSquared;
 }
 	
 double IntensityFit::loglike()
@@ -251,8 +251,7 @@ double IntensityAndAPSFit::APSChiSquared(std::shared_ptr<AngularPowerSpectrum<Me
 			}
 		}
 	}
-	int n = APSBins.size(); 	// number of elements in the triangular matrix should be given by (n^2 - n)/2
-	return chiSquared/((pow(n,2) -n)/2*APSMeasurement->MultipoleNumber());
+	return chiSquared;
 }
 
 /// This function calculates (sum - measurement)^2 / (measurement_error)  for all energy bins i,j with j <=i 
@@ -279,8 +278,7 @@ double IntensityAndAPSFit::CpChiSquared(std::shared_ptr<AngularPowerSpectrum<Mea
 			chiSquared += pow( (APS->at(i, j, 0).first - sum)/APS->at(i, j, 0).second, 2);
 		}
 	}
-	int n = APSBins.size(); 	// number of elements in the triangular matrix should be given by (n^2 - n)/2
-	return chiSquared/((pow(n,2) -n)/2.);
+	return chiSquared;
 }
 
 double IntensityAndAPSFit::loglike()
@@ -326,7 +324,7 @@ void IntensityAndAPSFit::plotResults(TFile* f)
 
 void IntensityAndAPSFit::plotAPS(std::shared_ptr<AngularPowerSpectrum<Measurement>> APS, const double& S_t, TFile* f)
 {
-	/// plot shit for each energy bin
+	/// plot Cl for each energy bin
 	for(unsigned int i = 0; i < APS->Bin1Size(); i++)
 	{
 		std::vector<double> Cl; Cl.resize(APS->MultipoleNumber());

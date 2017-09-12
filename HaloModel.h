@@ -116,8 +116,8 @@ void HaloModel::Init(unsigned int MLen, unsigned int zLen, unsigned int kLen, st
 	CalculateLinearHaloBias(M, z, f);
 	CalculateHaloMassFunction(M, z, f);
 	CalculateNFWHaloDensityProfileFT(k, M, z, f);
-	CalculateSourceDensitySubhaloBoostFT(M, k, z, 1, f);
-	CalculateClumpingFactor(M, z, 1, f);
+	CalculateSourceDensitySubhaloBoostFT(M, k, z, 0, f);
+	CalculateClumpingFactor(M, z, 0, f);
 }
 
 
@@ -257,7 +257,7 @@ double HaloModel::SubhaloBoostFactor(const double M)
 /// Dark Matter density for a givev redshift
 double HaloModel::DMDensity(const double z)
 {
-	return CM->O_dm*CM->CriticalDensity*pow(1.+z, 3.);  // check
+	return CM->O_dm*CM->CriticalDensity*pow(1.+z, 3.); 
 }
 
 struct HaloModel::FTIntegrandParameters
@@ -380,7 +380,7 @@ double HaloModel::NFWHaloDensityProfile(const double r, const double M, const do
 	const double r_vir = pow(3*M /(4*M_PI*VirialOverdensity*DMDensity(z)), 1./3.)*1._Mpc;
 	const double r_s = r_vir/c;
 	const double rho_s = M/(4*M_PI*pow(r_s,3)) * (log(1.+c) - c/(1.+c));
-	return rho_s*r_s/(r*pow(1.+ r/r_s, 2));
+	return rho_s/(r/r_s*pow(1.+ r/r_s, 2));
 }
 
 
@@ -397,7 +397,7 @@ void HaloModel::CalculateSourceDensitySubhaloBoostFT(std::vector<double>& M, std
 	
 	auto NFWIntegrand = std::make_shared<TF1>("NFW halo density ^2", 
 												[this] ( double* args, double* params) // args[0]: log(r)  params[0]: M  params[1]: z
-												{	return exp(args[0])*pow(NFWHaloDensityProfile(exp(args[0]), params[0], params[1])/DMDensity(params[1]), 2.);	},
+												{	return exp(args[0])*pow(NFWHaloDensityProfile(exp(args[0]), params[0], params[1])/DMDensity(/*params[1]*/0), 2.);	},
 													log(rBounds.first),  log(rBounds.second), 2);	
 	
 	auto SourceDensityWithSubhaloBoost = std::make_shared<Interpolation3DWrapper>(r.data(), r.size(), M.data(), M.size(), z.data(), z.size());
