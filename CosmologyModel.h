@@ -40,14 +40,14 @@ public:
 	
 	LambdaCDM(Bounds zBounds, unsigned int zGridLen)
 	{
-		O_m = 0.315;  			// matter density
+		O_m = 0.27;  			// matter density
 		CriticalDensity = 3.*H_0*H_0/(8.*M_PI*G)  *(1.551812e-11) ;	// in  M_solar /  MPc^3
 															// converted kg / (Mpc^2  km) to solar mass / (Mpc^3)
 		d_H = c_0/H_0; 		// Hubble distance	in Mpc
 		O_r = 0.; 			// radiation density
 		O_l = 0.73;			// dark energy density
 		O_k = 0;			// curvature
-		O_dm = 0.27;
+		O_dm = 0.23;
 		
 		std::vector<double> zGrid; zGrid.resize(zGridLen);
 		std::vector<double> CD; CD.resize(zGrid.size());
@@ -71,8 +71,8 @@ public:
 	
 	double HubbleRate(const double z)
 	{
-		return H_0;  // check!
-	}
+		return H_0*sqrt(O_m*pow(1.+z, 3) + 1. - O_m) ;  // check!
+	}		// Only implemented for curvature =0  atm!
 	
 	double ComovingDistance(const double z) override
 	{

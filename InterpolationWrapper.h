@@ -20,6 +20,14 @@ class gsl1DInterpolationWrapper;
 class gsl2DInterpolationWrapper;
 class Interpolation3DWrapper;
 
+/* These classes are the bread and butter of this code
+ * SO much interpolation
+ * 1D and 2D were initially just wrappers for gsl, because the pointer management was annoying
+ * But I added a lot of utility, which is used throughout the code
+ * The 3D algorithm is selfwritten and uses trilinear interpolation
+ * Should be exchanged when something better comes along
+ */
+
 
 /// 1D Interpolation
 class gsl1DInterpolationWrapper
@@ -37,8 +45,7 @@ protected:
 public:
 	// Main constructor
 	gsl1DInterpolationWrapper(const double* _x, const unsigned int n, const double* _y, const gsl_interp_type* T, double outOfBounds);
-	gsl1DInterpolationWrapper(std::istream& i, const gsl_interp_type* T, double outOfBounds);
-	gsl1DInterpolationWrapper();
+	gsl1DInterpolationWrapper(std::istream& i, const gsl_interp_type* T, double outOfBounds);	// this allows loading from a stream, but needs to be positioned perfectly!
 	gsl1DInterpolationWrapper(const gsl1DInterpolationWrapper& w);
 	~gsl1DInterpolationWrapper();
 	
@@ -65,9 +72,10 @@ public:
 	// Saves data in the stream
 	void Save(std::ostream& o);
 	
+	// return a pointer to a ROOT TGraph
 	TGraph* MakeGraph();
 	
-	// Allows multiplication if they have the same grid!
+	// Allows multiplication if they have the same grid!			// can be changed to combine the grids
 	friend gsl1DInterpolationWrapper operator*(const gsl1DInterpolationWrapper& iw1, const gsl1DInterpolationWrapper& iw2)
 	{
 		assert(iw1.n == iw2.n);
@@ -79,7 +87,7 @@ public:
 		return res;
 	}
 	
-	// Allows addition if they have the same grid
+	// Allows addition if they have the same grid		
 	friend gsl1DInterpolationWrapper operator+(const gsl1DInterpolationWrapper& iw1, const gsl1DInterpolationWrapper& iw2)
 	{
 		assert(iw1.n == iw2.n);
@@ -91,6 +99,7 @@ public:
 		return res;
 	}
 	
+	// Calculates the square root for all output values and returns a new object
 	friend gsl1DInterpolationWrapper sqrt(const gsl1DInterpolationWrapper& iw)
 	{
 		double* y = new double[iw.n];
@@ -120,10 +129,10 @@ protected:
 	bool initiated;
 
 public:
-	// Main constructor
+	// Main constructors
 	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const double** _z, const gsl_interp2d_type* T);
 	gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const gsl_interp2d_type* T);
-	gsl2DInterpolationWrapper(std::istream& in, const gsl_interp2d_type* T);
+	gsl2DInterpolationWrapper(std::istream& in, const gsl_interp2d_type* T);	// this allows loading from a stream, but should be positioned perfectly
 	
 	gsl2DInterpolationWrapper(const gsl2DInterpolationWrapper& w);
 	~gsl2DInterpolationWrapper();
@@ -154,6 +163,12 @@ public:
 	// Outputs most data for debugging purposes
 	void print();
 	
+	// returns an interpolation object along the x axis at a point y
+	gsl1DInterpolationWrapper AlongX(const double y);
+	
+	// returns an interpolation object along the y axis at a point x
+	gsl1DInterpolationWrapper AlongY(const double x);
+	
 	// Saves the data in the stream
 	void Save(std::ostream& o);
 	
@@ -161,19 +176,48 @@ public:
 	Bounds get_yBounds() { return yBounds; }
 	
 	// Plots along the x axis at point y
-	TGraph* MakeGraphAty(const double y);
+	TGraph* MakeGraphAlongX(const double y);
 	
 	// Plots along the x axis at point y
-	TGraph* MakeGraphAtx(const double x);
+	TGraph* MakeGraphAlongY(const double x);
 	
 	
 	static gsl2DInterpolationWrapper Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > &splines, const std::vector<double>& y);
 };
 
+/// 3D interpolation, self written
+class Interpolation3DWrapper
+{
+protected:
+double* x; unsigned int n_x; 
+double* y; unsigned int n_y; 
+double* z; unsigned int n_z; 
+double* f;
+
+double interp(const double& _x, const double& _y, const double& _z);	// no bounds checking!
+double extrap(const double& _x, const double& _y, const double& _z);
+double& access(unsigned int i, unsigned int j, unsigned int k);			// no bounds checking!
+
+public:
+
+Interpolation3DWrapper(const double* _x,unsigned int n_x, const double* _y, unsigned int n_y, const double* z,unsigned int n_z);	// allocates the grid to hold the data, but has to be set with Val()
+Interpolation3DWrapper(std::istream& in);																								// (no Initialize() is needed)
+Interpolation3DWrapper(const Interpolation3DWrapper& iw);
+~Interpolation3DWrapper();
+Interpolation3DWrapper& operator =(const Interpolation3DWrapper& iw);
+double& Val(unsigned int i, unsigned int j, unsigned int k);			// with bounds checking
+double Eval(const double& _x, const double& _y, const double& _z);		// with bounds checking
+void print();
+void Save(std::ostream& o);
+
+};
+
 
 /// gsl1DInterpolation
 
-
+// Main constructor
+// Takes in grid in x with size n, and the resulting y values
+// interpolation type can be specified, as well as any OutOfBounds value, because gsl1D can't extrapolate as far as I know
 gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(const double* _x, const unsigned int n, const double* _y, const gsl_interp_type* T= gsl_interp_linear, double outOfBounds = NAN) : n(n), T(T), outOfBounds(outOfBounds)
 {
 	x = new double[n];
@@ -189,19 +233,7 @@ gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(const double* _x, const uns
 	xBounds.first = x[0];  xBounds.second = x[n-1];	
 }
 
-// Constructs an Interpolator that always return NAN
-gsl1DInterpolationWrapper::gsl1DInterpolationWrapper() : T(gsl_interp_linear), outOfBounds(NAN)
-{
-	n = 2;
-	x = new double[n]; y = new double[n];
-	x[0] = 0; x[1] = 1;  y[0] = NAN; y[1] = NAN;
-	xBounds.first = 0; xBounds.second = -1;
-	spline = gsl_interp_alloc(T, n);
-	x_acc = gsl_interp_accel_alloc();
-	gsl_interp_init(spline, x, y, n);
-	
-}
-
+// Copy constructor
 gsl1DInterpolationWrapper::gsl1DInterpolationWrapper(const gsl1DInterpolationWrapper& w) : xBounds(w.xBounds), n(w.n),  T(w.T), outOfBounds(w.outOfBounds)
 {
 	x = new double[n];
@@ -324,7 +356,9 @@ gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const double* _x, const uns
 	yBounds.first = y[0];  yBounds.second = y[n_y-1];
 	initiated = true;
 }
-
+// This costructor allows the allocation of a result grid without filling it
+// gsl throws an error if Initialize() isn't called 
+// But maybe the internal bool value can be used, for a better error message
 gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(const double* _x, const unsigned int n_x, const double* _y, const unsigned int n_y, const gsl_interp2d_type* T= gsl_interp2d_bilinear) : n_x(n_x), n_y(n_y), T(T)
 {
 	x = new double[n_x];
@@ -440,7 +474,7 @@ void gsl2DInterpolationWrapper::Save(std::ostream& o)
 		}
 	}
 }
-
+// Loads from a filestream
 gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(std::istream& in, const gsl_interp2d_type* T= gsl_interp2d_bilinear) : T(T)
 {
 	in >> n_x >> n_y;
@@ -467,14 +501,14 @@ gsl2DInterpolationWrapper::gsl2DInterpolationWrapper(std::istream& in, const gsl
 	yBounds.first = y[0];  yBounds.second = y[n_y-1];
 	initiated = true;
 }
-
+// This allows to set the values of the result
 double& gsl2DInterpolationWrapper::Val(unsigned int i, unsigned int j)
 {
 	assert(i < n_x && j < n_y);
 	return z[i+n_x*j];
 }
 	
-	// Performs initiation of gsl
+// Performs initiation of gsl
 void gsl2DInterpolationWrapper::Initialize()
 {
 	if(initiated) return;
@@ -482,7 +516,27 @@ void gsl2DInterpolationWrapper::Initialize()
 	initiated = true;
 }
 
-TGraph* gsl2DInterpolationWrapper::MakeGraphAty(const double y)
+// returns an interpolation object along the x axis at a point y
+gsl1DInterpolationWrapper gsl2DInterpolationWrapper::AlongX(const double y)
+{
+	double* p = new double[n_x];
+	for(unsigned int i = 0; i < n_x; i++) p[i] = this->Eval(x[i], y);
+	auto g = gsl1DInterpolationWrapper(x, n_x, p);
+	delete []p;
+	return g;
+}
+	
+// returns an interpolation object along the y axis at a point x
+gsl1DInterpolationWrapper gsl2DInterpolationWrapper::AlongY(const double x)
+{
+	double* p = new double[n_y];
+	for(unsigned int i = 0; i < n_y; i++) p[i] = this->Eval(x, y[i]);
+	auto g = gsl1DInterpolationWrapper(y, n_y, p);
+	delete []p;
+	return g;
+}
+
+TGraph* gsl2DInterpolationWrapper::MakeGraphAlongX(const double y)
 {
 	double* p = new double[n_x];
 	for(unsigned int i = 0; i < n_x; i++) p[i] = this->Eval(x[i], y);
@@ -491,7 +545,7 @@ TGraph* gsl2DInterpolationWrapper::MakeGraphAty(const double y)
 	return g;
 }
 
-TGraph* gsl2DInterpolationWrapper::MakeGraphAtx(const double x)
+TGraph* gsl2DInterpolationWrapper::MakeGraphAlongY(const double x)
 {
 	double* p = new double[n_y];
 	for(unsigned int i = 0; i < n_y; i++) p[i] = this->Eval(x, y[i]);

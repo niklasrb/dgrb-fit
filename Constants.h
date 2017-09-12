@@ -3,6 +3,11 @@
 
 #include <tuple>
 
+/* Defines some unit references and physical constants
+ * And the Bounds and Measurement objects, which are used throughout the code
+ * 
+ */
+
 // Mass reference
 constexpr double operator "" _M_solar(long double d) { return d; }
 

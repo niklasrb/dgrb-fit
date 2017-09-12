@@ -19,7 +19,8 @@
 #include "LinearMatterPowerSpectrum.h"
 #include "AngularPowerSpectrum.h"
 
-
+// Loads the data for the EBL Absorption coefficient
+// and returns a 2D interpolation object, depending on energy and redshift
 std::shared_ptr<EBLAbsorbtionCoefficient> LoadEBLAbsorbtionCoefficient(std::fstream& file)
 {
 	assert(file.is_open());
@@ -44,7 +45,8 @@ std::shared_ptr<EBLAbsorbtionCoefficient> LoadEBLAbsorbtionCoefficient(std::fstr
 	return std::make_shared<EBLAbsorbtionCoefficient>(spline);
 }
 
-
+// Loads the linear matter power spectrum from a list of files
+// returns 2D interpolation object depending on wavenumber and resdshift
 std::shared_ptr<LinearMatterPowerSpectrum> LoadLinearMatterPowerSpectrum(std::vector<std::fstream>& files)
 {
 	unsigned int kGridSize = 643;
@@ -72,6 +74,9 @@ std::shared_ptr<LinearMatterPowerSpectrum> LoadLinearMatterPowerSpectrum(std::ve
 	return std::make_shared<LinearMatterPowerSpectrum>(spline);
 }
 
+// loads the energy spectrum of dark matter from simulations
+// returns 2D interpolation object depending on mass and logX, where x = 2E/m 
+// check papers
 std::shared_ptr<gsl2DInterpolationWrapper> LoaddNdLogx(std::fstream& file)
 {
 	std::string line;
@@ -109,6 +114,7 @@ std::shared_ptr<gsl2DInterpolationWrapper> LoaddNdLogx(std::fstream& file)
 	return NofLogx;
 }
 
+// Loads the energy bins and intensity measurements from a single file
 void LoadDGRB(std::fstream& file, std::vector<Bounds>& IntensityBins, std::vector<Measurement>& DGRB)
 {
 	std::string line; std::stringstream ss; 
@@ -123,7 +129,7 @@ void LoadDGRB(std::fstream& file, std::vector<Bounds>& IntensityBins, std::vecto
 	}
 }
 
-/// Loads the whole APS
+// Loads the whole APS (Cl for different energy bins and multipole)
 std::shared_ptr<AngularPowerSpectrum<Measurement> > LoadAnistropy(std::string directory, int nBin, int nMul, std::vector<double>& Multipoles)
 {
 	std::string line; std::stringstream ss; double buf; Measurement m;
@@ -155,7 +161,7 @@ std::shared_ptr<AngularPowerSpectrum<Measurement> > LoadAnistropy(std::string di
 	return APS;
 }
 
-/// Only loads Cp data
+// Only loads Cp data
 std::shared_ptr<AngularPowerSpectrum<Measurement> > LoadAnistropy(std::string filepath, int nBin)
 {
 	std::string line; std::stringstream ss;

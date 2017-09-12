@@ -7,6 +7,9 @@
 #include "TFile.h"
 #include "TGraph.h"
 
+/* Wrapper class that holds the data for the linear matter power spectrum
+ * just a 2D interpolation object
+ */
 
 class LinearMatterPowerSpectrum
 {
