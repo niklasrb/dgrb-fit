@@ -15,6 +15,12 @@
 #include "EBLAbsorbtionCoefficient.h"
 #include "AngularPowerSpectrum.h"
 
+
+/* This class is the base class for all source populations
+ * Containing a window function and a source density FT
+ * the EBL absorption coefficient and Cosmology Model
+ * Also holds the intensity values
+ */
 class DGRBSource
 {
 public:

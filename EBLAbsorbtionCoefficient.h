@@ -7,6 +7,12 @@
 #include "TROOT.h"
 #include "TFile.h"
 
+
+/* This class models the EBL absorption coeffiecient
+ * I never know how to spell Absor(b/p)tion, sorry for that
+ * Just holds a 2D interpolation object
+ * But could be changed to whatever model
+ */
 class EBLAbsorbtionCoefficient
 {
 protected:

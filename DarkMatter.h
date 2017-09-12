@@ -14,7 +14,11 @@
 #include "HaloModel.h"
 #include "AngularPowerSpectrum.h"
 
-
+/* Classes that hold information about Dark Matter objects
+ * Energy spectrum is taken from simulations
+ * Parameter here is Mass
+ * APS is just a 3D matrix pointing to double values
+ */
 class DarkMatter : public DGRBSource
 {
 protected:
@@ -32,6 +36,7 @@ public:
 
 };
 
+/// Annihilating Dark matter is characterized by the Thermalized Annihilation Cross Section
 class AnnihilatingDM : public DarkMatter
 {
 public:
@@ -41,21 +46,20 @@ public:
 	{
 		// Set EnergySpectrum
 		EnergySpectrum = [dNdLogx, m] ( const double E, const double z)
-						{ 	//std::cout << log(2.*E/(e*c_0*c_0*Mass)) << '\t' << this->dNdLogx->Eval(log(2.*E/(e*c_0*c_0*Mass)))/E << std::endl;
-							return std::max(0., dNdLogx->Eval(m, log10(2.*E/m))) /E; };
+						{ 	return std::max(0., dNdLogx->Eval(m, log10(2.*E/m))) /E; };
 		
 		WindowFunction = [this] ( const double E, const double z) 
-						{ //std::cout << this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  << '\t' <<  pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) << '\t' <<  this->EnergySpectrum(E*(1.+z), z) << '\t' << exp(-(*(this->tau))(E,z)) << std::endl;
-							return this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  * pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) * this->HM->ClumpingFactor(z) * this->EnergySpectrum(E*(1.+z), z) * exp(-(*(this->tau))(E*(1.+z),z)); };
+						{ 	return this->ThermalizedAnnihilationCrossSection / (8.*M_PI)  * pow(CM->O_dm * CM->CriticalDensity / Mass, 2.) * pow(1.+z, 3.) * this->HM->ClumpingFactor(z) * this->EnergySpectrum(E*(1.+z), z) * exp(-(*(this->tau))(E*(1.+z),z)); };
 	
-		SourceDensityFT = [this] (const double k, const double M, const double z)
+		SourceDensityFT = [this] (const double k, const double M, const double z)	// Load the source density from the Halo Model		// This should probably be moved out of the HaloModel class, and computed internally in the DM class
 						{ std::cout << "SDSBFT: " << this->HM->SourceDensitySubhaloBoostFT(k, M, z) << " CF: " << this->HM->ClumpingFactor(z) << std::endl;
 							return this->HM->SourceDensitySubhaloBoostFT(k, M, z) / this->HM->ClumpingFactor(z); };
-	}
+	}						
 	
 	
 };
 
+/// Decaying DM is characterized by its Half Life
 class DecayingDM : public DarkMatter
 {
 public:

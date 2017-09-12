@@ -6,6 +6,9 @@
 #include <cmath>
 #include <algorithm>
 
+/* This class models Flat Spectrum Radio Quasars
+ */
+
 class FSRQ : public AstrophysicalSource
 {
 protected:

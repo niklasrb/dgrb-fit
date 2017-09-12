@@ -21,10 +21,7 @@ double *, double *, double *, void *), void *context);
 }
 
 
-
 /***********************************************************************************************************************/
-
-//#endif // ifdef __cplusplus
 
 #include <string>
 #include <cstring>
@@ -34,7 +31,7 @@ double *, double *, double *, void *), void *context);
 #include <cassert>
 #include "Constants.h"
 
-
+// A struct to hold the options, so the class namespace isn't filled with crap
 struct MultiNestFitOptions
 {
 	int IS;  		// Nested Importance Sampling
@@ -57,9 +54,11 @@ struct MultiNestFitOptions
 	int maxiter;	// max no. of iteration / non-positive means infinte
 };
 
+// Collects data for the dumper 
+// Should be changed to hold all past live points
+// But wasn't needed so far
 struct MultiNestFitData
 {
-	//MultiNestFitDump(int nSamples, int nLivePoints, int nPar, double
 	//double** posteriorDistribution;
 	std::vector<double> lastParameters;
 	double logLike;
@@ -72,11 +71,17 @@ struct MultiNestFitData
 	 int nPar;
 };
 
+// A small parameter class, which takes the internal multinest parameter and scales it linearly inside its bounds
 class MultiNestParameter final	// is final atm, so that the std::vector<MultiNestParameter> in the MultiNestFit class does not fall victim to object splicing 
 {
 friend class MultiNestFit;
 protected:
 	double internalMultinestParameter;	// between 0 and 1
+	double getValue(double internalMultinestParameter)
+	{
+		this->internalMultinestParameter = internalMultinestParameter;
+		return getValue();
+	}
 public:
 	std::string name;
 	Bounds bounds;
@@ -87,6 +92,7 @@ public:
 	}
 	double operator()()	{return getValue(); }	// syntactic sugar
 	// standard constructors will work
+	
 	MultiNestParameter(Bounds bounds, std::string name = "", bool periodicBoundaryCondition = false) : name(name), bounds(bounds), periodicBoundaryCondition(periodicBoundaryCondition)
 	{
 		internalMultinestParameter = 0;
@@ -98,7 +104,9 @@ public:
 };
 
 
-
+// This class uses the *context pointer in multinest to call its own loglike and dumper function
+// So that a fit class can hold data and use it easily without using too much pointer magic
+// Other classes should inherit from this
 class MultiNestFit
 {
 private:
@@ -106,9 +114,11 @@ private:
 	static void _dumper(int *nSamples, int *nlive, int *nPar, double **physLive, double **posterior, double **paramConstr, double *maxLogLike, double *logZ, double *INSlogZ, double *logZerr, void *context);
 	
 protected:
-	std::vector<MultiNestParameter> Parameters;		
-	
-	virtual double loglike() = 0;
+	std::vector<MultiNestParameter> Parameters;		// The list of parameters can be used, but doesn't have to be
+													// The size of this determines nPar passed to multinest though
+													// And on _loglike call the list is updated
+													// So if not used, the Run, _loglike, and _dumper functions should be overwritten
+	virtual double loglike() = 0;	// child classes need to implement these
 	virtual void dumper(MultiNestFitData& data) = 0;
 
 public:
@@ -116,7 +126,8 @@ public:
 	MultiNestFitData data;
 	
 	MultiNestFit(std::string output);
-	//~MultiNestFit();
+	MultiNestFit(const MultiNestFitOptions& mnfo);
+	//~MultiNestFit();		// The default constructors should work
 	//MultiNestFit(const MultiNestFit* mnf) = delete;
 	//MultiNestFit& operator =(const MultiNestFit* mnf) = delete;
 	
@@ -125,13 +136,13 @@ public:
 	
 };
 
-MultiNestFit::MultiNestFit( std::string output = "") 
+MultiNestFit::MultiNestFit( std::string output = "") // setting some standards
 {	
 	options.IS = 1;					// do Nested Importance Sampling?
 	options.mmodal = 0;					// do mode separation?
 	options.ceff = 0;					// run in constant efficiency mode?
 	options.nlive = 1000;				// number of live points
-	options.efr = 0.5;				// set the required efficiency
+	options.efr = 0.3;				// set the required efficiency
 	options.tol = 0.1;				// tol, defines the stopping criteria
 	options.updInt = 1000;				// after how many iterations feedback is required & the output files should be updated
 							// note: posterior files are updated & dumper routine is called after every updInt*10 iterations
@@ -155,14 +166,15 @@ MultiNestFit::MultiNestFit( std::string output = "")
 	}
 }
 
+MultiNestFit::MultiNestFit(const MultiNestFitOptions& mnfo) : options(mnfo)
+{	}
 
-void MultiNestFit::_loglike(double *Cube, int *n_dim, int *n_par, double *lnew, void *context)
+void MultiNestFit::_loglike(double *Cube, int *n_dim, int *n_par, double *lnew, void *context)	// uses the *context pointer to call the MultiNestFit::loglike function
 {
 	auto mnf = ((MultiNestFit*)context);
-	assert((int)mnf->Parameters.size() == *n_dim);
-	for(unsigned int i = 0; i < mnf->Parameters.size(); i++) mnf->Parameters[i].internalMultinestParameter = Cube[i];
-	*lnew = mnf->loglike();
-	//std::cout << "lnew = " << *lnew << std::endl;
+	assert((int)mnf->Parameters.size() == *n_dim);	// this needs to be changed if the parameter lists isn't used
+	for(unsigned int i = 0; i < mnf->Parameters.size(); i++)  Cube[i] = mnf->Parameters[i].getValue(Cube[i]);	// save parameters in class and return the rescaled version
+	*lnew = mnf->loglike();	// actually calculate the loglike
 }
 
 
@@ -183,25 +195,22 @@ void MultiNestFit::_dumper(int *nSamples, int *nlive, int *nPar, double **physLi
 	mnf->dumper(mnf->data);
 }
 
+// This starts the multinest fitting with the specified parameters
 MultiNestFitData& MultiNestFit::Run()
 {
 	char root[100];
 	std::strcpy(root, options.root.c_str());
-	for(int i = std::strlen(root); i < 100; i++) root[i] = ' ';
+	for(int i = std::strlen(root); i < 100; i++) root[i] = ' ';		// prepare output string as multinest wants it
 	
 	int nPar = Parameters.size();
 	int ndims = nPar;					// dimensionality (no. of free parameters)
 	int nClsPar = nPar;				// no. of parameters to do mode separation on
 	int pWrap[nPar];
-	for(unsigned int i = 0; i < Parameters.size(); i++) pWrap[i]=(int)Parameters[i].periodicBoundaryCondition; //pWrap[i] = (int)parameters[i].periodicBoundaryConditions;
-	void *context = this;				// not required by MultiNest, any additional information user wants to pass
-	
+	for(unsigned int i = 0; i < Parameters.size(); i++) pWrap[i]=(int)Parameters[i].periodicBoundaryCondition; 
+	void *context = this;				// This is why we can use the class here
 	data.lastParameters.resize(nPar);
+	
 	// calling MultiNest
-
-	//nested::run(IS, mmodal, ceff, nlive, tol, efr, ndims, nPar, nClsPar, maxModes, updInt, Ztol, root, seed, pWrap, fb, resume, outfile, initMPI,
-	//				logZero, maxiter, _loglike, _dumper, context);
-	for (int i = strlen(root); i < 100; i++) root[i] = ' ';
 
      NESTRUN(&options.IS, &options.mmodal, &options.ceff, &options.nlive, &options.tol, &options.efr, &ndims, &nPar, &nClsPar, &options.maxModes, &options.updInt, &options.Ztol,
         root, &options.seed, pWrap, &options.fb, &options.resume, &options.outfile, &options.initMPI, &options.logZero, &options.maxiter, &_loglike, &_dumper, context);

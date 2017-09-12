@@ -5,6 +5,13 @@
 #include <functional>
 #include <string>
 
+/* These classes model Galaxy catalogues
+ * They are not used at the moment, but were intended for use in cross correlation computations
+ * Maybe make them take on detection efficiency
+ * But those are used differently, so I'm not sure
+ */
+
+
 class GalaxyCatalog
 {
 protected:

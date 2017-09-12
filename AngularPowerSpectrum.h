@@ -8,6 +8,11 @@
 
 #include "Constants.h"
 
+/* Template class for holding different types of APS data
+ * Models a 3D matrix with 2 energy bins and 1 multipole axis
+ * The memory is constructed on constructor call and needs to be filled with () or at()
+ */
+
 template<typename T> 
 class AngularPowerSpectrum
 {
@@ -15,13 +20,13 @@ protected:
 	T* data;		// 3dim Matrix to hold the APS
 	unsigned int nBin1, nBin2, nMul;	// dimension of this matrix
 	
-	T& access(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)
+	T& access(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)	// internal & without Bounds checking
 	{
 		return data[EBin1 + nBin1 * (EBin2 + nBin2 * Multipole)];
 	}
 	
 public:
-	virtual T& operator ()(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)
+	virtual T& operator ()(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)	// Bounds checking
 	{
 		assert(EBin1 < nBin1  && EBin2 < nBin2 && Multipole < nMul);
 		return access(EBin1, EBin2, Multipole);
@@ -37,7 +42,6 @@ public:
 		return (*this)(EBin1, EBin2, Multipole);
 	}
 	
-	/// Use this constructor if you dont't have the data yet, or don't want to deal with memory
 	AngularPowerSpectrum(unsigned int nBin1, unsigned int nBin2, unsigned int nMul) : nBin1(nBin1), nBin2(nBin2), nMul(nMul)
 	{
 		data = new T[nBin1*nBin2*nMul];
@@ -48,7 +52,7 @@ public:
 		delete [] data;
 	}
 	
-	AngularPowerSpectrum(const AngularPowerSpectrum& aps) : nBin1(aps.nBin1), nBin2(aps.nBin2), nMul(aps.nMul)
+	AngularPowerSpectrum(const AngularPowerSpectrum& aps) : nBin1(aps.nBin1), nBin2(aps.nBin2), nMul(aps.nMul)	// copy constructor
 	{
 		data = new T[nBin1*nBin2*nMul];
 		for(unsigned int i = 0; i < nBin1*nBin2*nMul; i++) data[i] = aps.data[i];
@@ -68,12 +72,14 @@ public:
 
 
 /// This class makes use of the fact that C_p is constant in Multipole
+/// and makes essentially a 2D matrix
 template<typename T> 
 class AstrophysicalSourceAPS :	public AngularPowerSpectrum<T>
 {
 public:
 	AstrophysicalSourceAPS(const std::vector<Bounds>& EBins) : AngularPowerSpectrum<T>::AngularPowerSpectrum(EBins.size(), EBins.size(), 1)	{	}
 	
+	AstrophysicalSourceAPS(unsigned int EBin1, unsigned int EBin2) : AngularPowerSpectrum<T>::AngularPowerSpectrum(EBin1, EBin2, 1)	{	}
 	
 	T& operator ()(unsigned int EBin1, unsigned int EBin2)
 	{
@@ -93,25 +99,7 @@ public:
 	}
 	
 };
-/*
-/// Specific implementation that is useful when you have the APS as a list of doubles
-template<> 
-class AstrophysicalSourceAPS<double>
-{
-	AstrophysicalSourceAPS(std::vector<Bounds>& EBins, std::vector<double>& C_p) : AstrophysicalSourceAPS<double>::AstrophysicalSourceAPS(EBins)
-	{
-		assert(EBins.size() == C_p.size());
-		
-		for(unsigned int i = 0; i < EBin.size(); i++)
-		{
-			for(unsigned int j = 0; j < EBin.size(); j++)
-			{
-				this->data[i][j][0] = sqrt(C_p[i]*C_p[j]);
-			}
-		}
-	}
-};
-*/
+
 
 
 #endif

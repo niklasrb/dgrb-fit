@@ -5,7 +5,11 @@
 #include <vector>
 #include "Constants.h"
 
-
+/* This is a small class that contains the detection efficiencies
+ * and the flux threshold > 1GeV
+ * Since the flux threshold depends more on the galaxy catalog
+ * this class should be abolished in favor of the galaxy catalog class
+ */
 class Detector
 {
 public:

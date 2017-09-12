@@ -7,6 +7,11 @@
 #include <algorithm>
 #include <memory>
 
+/* These classes model Blazar contributions
+ * Low and Intermediate synchroton peaked LISP
+ * and high synchroton peaked HSP 
+ */
+
 class BLLAC : public AstrophysicalSource
 {
 protected:

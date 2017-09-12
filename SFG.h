@@ -94,7 +94,7 @@ protected:
 class NGSFG : public SFG	// normal galaxies that are star forming galaxies
 {
 public:
-	NGSFG(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("NG SFG"))
+	NGSFG(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("SFG NG"))
 	{
 		alpha = 1.0;
 		sigma = 0.5;
@@ -108,7 +108,7 @@ public:
 		L_IR_0 = pow(10, 9.78)*L_solar;		
 		Phi_s_0 = pow(10, -2.12)/pow(1._Mpc, 3);
 		
-		k = 1e3;
+		k = 1e5;
 	}
 	
 };
@@ -116,7 +116,7 @@ public:
 class SBSFG : public SFG	// star burst star forming galaxies
 {
 public:
-	SBSFG(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("SB SFG"))
+	SBSFG(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("SFG SB"))
 	{
 		alpha = 1.0;
 		sigma = 0.35;
@@ -132,7 +132,7 @@ public:
 		
 		
 		LumBounds.first = 1e35;
-		k = 1e3;
+		k = 1e5;
 	}
 	
 };
@@ -145,7 +145,7 @@ private:
 	
 	std::vector<std::pair<Bounds, double> > redshift_dependence;
 public:
-	SFGAGN(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("SFGAGN"))
+	SFGAGN(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : SFG(CM, tau, std::string("SFG AGN"))
 	{
 		alpha = 1.20;
 		sigma = 0.40;
@@ -158,7 +158,7 @@ public:
 		L_IR_0 = pow(10, 10.80)*L_solar;	
 		Phi_s_0 = pow(10, -3.2)/pow(1._Mpc, 3);
 		
-		k = 1e3;
+		k = 1e5;
 		
 		sbsfg = std::make_shared<SBSFG>(CM, tau);
 		ngsfg = std::make_shared<NGSFG>(CM, tau);
@@ -193,6 +193,7 @@ public:
 };
 
 /// This constructor cobines all the different SFG populations into one 
+/// By adding the results for intensity and APS coeffiecients together
 SFG::SFG(std::shared_ptr<SBSFG> SB, std::shared_ptr<NGSFG> NG, std::shared_ptr<SFGAGN> AGN) : SFG(SB->CM, SB->tau, std::string("SFG"))	
 {
 	assert(SB->Intensity.size() == NG->Intensity.size() && NG->Intensity.size() == AGN->Intensity.size());

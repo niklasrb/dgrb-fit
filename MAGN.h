@@ -10,6 +10,7 @@ class MAGN : public AstrophysicalSource
 {
 protected:
 	const double E_0 = 1._GeV; 
+	const double k = 3.05;
 public:
 	MAGN(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : AstrophysicalSource(_CM, tau, std::string("MAGN"))
 	{
@@ -20,7 +21,7 @@ public:
 	
 	double kCorrection(const double E, const double z, const double Gamma) override
 	{
-		return pow(1+z, 2-Gamma);
+		return pow(1.+z, 2.-Gamma);
 	}
 	
 	double literal_F(const double E, const double z, const double Gamma) override
@@ -35,10 +36,9 @@ public:
 	
 	double LuminosityFunction(const double L, const double z) override
 	{
-		/*const double k = 3.05;*/
 		const double L_151 =  pow(151./1400.,0.2) * pow(10.,-22.2/0.77) * pow(0.2*L/1._ergpers,(1./0.77));
-		std::cout << "MAGN: L_151 = " << L_151 << std::endl;
-		return /*k*/eta(z)*radioLuminosityFunction( L_151, z)/(0.77*1.008);
+		//std::cout << "MAGN: L_151 = " << L_151 << std::endl;
+		return k*1e3*eta(z)*radioLuminosityFunction( L_151, z)/(0.77*1.008);
 	}
 	
 protected:
@@ -47,7 +47,7 @@ protected:
 		return pow(c_0, 3)*pow(z*(2.+z), 2.)/(4.*pow(50.*(1. + z), 3))/CM->ComovingVolumeElement(z);
 	}
 	double radioLuminosityFunction(const double L, const double z)	// in erg/s
-	{/*
+	{
 		const double rho_lo = pow(10,-7.523);
 		const double L_ls = pow(10,26.48);		// in erg/s
 		const double alpha_l = 0.586;
@@ -60,10 +60,10 @@ protected:
 		const double z_h1 = 0.568;
 		const double z_h2 = 0.956;
 		
-		const double rho_l = rho_lo*pow((Luminosity/L_ls),-alpha_l)*exp(-Luminosity/L_ls)*pow(1.+ std::min(z, z_lo),k_1);
-		if(Luminosity <= 1e12) return rho_l;
-		const double rho_h = rho_ho*pow((Luminosity/L_hs),-alpha_h)*exp(-L_hs/Luminosity)*exp(-0.5*pow((z-z_ho)/(z >= z_ho ? z_h2 : z_h1), 2.));
-		return rho_l + rho_h;*/
+		const double rho_l = rho_lo*pow((L/L_ls),-alpha_l)*exp(-L/L_ls)*pow(1.+ std::min(z, z_lo),k_1);
+		if(L <= 1e12) return rho_l;
+		const double rho_h = rho_ho*pow((L/L_hs),-alpha_h)*exp(-L_hs/L)*exp(-0.5*pow((z-z_ho)/(z >= z_ho ? z_h2 : z_h1), 2.));
+		return rho_l + rho_h;/*
 		double rho_lo = pow(10,-7.523);
 		double L_ls = pow(10,26.48);
 		double alpha_l = 0.586;
@@ -93,7 +93,7 @@ protected:
 		double rho_h = rho_ho*powf((L/L_hs),-alpha_h)*exp(-L_hs/L)*fh;
 		double retval = rho_l;
 		if(L>1e+12){retval+=rho_h;}
-		return retval;
+		return retval;*/
 	}
 };
 
