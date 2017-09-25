@@ -28,7 +28,7 @@ protected:
 public:
 	virtual T& operator ()(unsigned int EBin1, unsigned int EBin2, unsigned int Multipole)	// Bounds checking
 	{
-		assert(EBin1 < nBin1  && EBin2 < nBin2 && Multipole < nMul);
+		assert(EBin1 < nBin1  && EBin2 < nBin2 && Multipole < nMul);	// assert stops the program execution if the term in the brackets is false
 		return access(EBin1, EBin2, Multipole);
 	}
 	

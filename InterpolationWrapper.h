@@ -181,7 +181,7 @@ public:
 	// Plots along the x axis at point y
 	TGraph* MakeGraphAlongY(const double x);
 	
-	
+	// Combines several 1D interpolation objects into a 2D one along a specified axis
 	static gsl2DInterpolationWrapper Combine(const std::vector<std::shared_ptr<gsl1DInterpolationWrapper> > &splines, const std::vector<double>& y);
 };
 

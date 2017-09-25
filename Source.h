@@ -24,11 +24,10 @@
 class DGRBSource
 {
 public:
-	
 	std::string Name;
 	
-	DGRBSource(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : DGRBSource(_CM, tau, std::string("")) {} 
-	DGRBSource(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string _name) : Name(_name), CM(_CM), tau(tau) {}
+	DGRBSource(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau) : DGRBSource(_CM, tau, std::string("")) {} 				// simple constructors
+	DGRBSource(std::shared_ptr<CosmologyModel> _CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string _name) : Name(_name), CM(_CM), tau(tau) {}	// standard copy constructors should work
 	
 	std::shared_ptr<CosmologyModel> CM;							// A pointer to a class containing the parameters of a cosmology model
 	std::shared_ptr<EBLAbsorbtionCoefficient> tau;				// A pointer to a class modelling the absorbtion due to Extragalactic Background Light, commonly tau
@@ -39,10 +38,8 @@ public:
 	std::function<double(const double k, const double M, const double z)> SourceDensityFT = 0;	// The fourier transform of the Source Density, important for calculating cross sections with Galaxy Catalogues
 	
 	// The calculated results will be saved here
-	std::vector<double > Intensity;		// A list of  Intensities, depending on EnergyBin
-	//std::function<double(const double E)> APS = 0;
-	
-	virtual ~DGRBSource() {}
+	std::vector<double > Intensity;		// A list of  Intensities, depending on EnergyBin  (maybe encapsulate this better)
+
 };
 
 

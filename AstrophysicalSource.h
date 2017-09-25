@@ -53,7 +53,7 @@ public:
 AstrophysicalSource::AstrophysicalSource(std::shared_ptr<CosmologyModel> CM, std::shared_ptr<EBLAbsorbtionCoefficient> tau, std::string name)
 :	DGRBSource(CM, tau, name)
 {
-	zBounds = Bounds(0, 6);
+	zBounds = Bounds(0, 6);				// defining some default values, that can be (and sometimes are) overwritten
 	GammaBounds = Bounds(0., 0.);
 	LumBounds = Bounds(1e40_ergpers, 1e52_ergpers);
 }
@@ -69,7 +69,7 @@ double AstrophysicalSource::EnergySpectrum(const double E, const double z, const
 	return literal_F(E, z, Gamma)*exp(-(*tau)(E, z));
 }
 
-double AstrophysicalSource::EnergySpectrumOverK(const double E, const double z, const double Gamma)
+double AstrophysicalSource::EnergySpectrumOverK(const double E, const double z, const double Gamma)		// this function was only implemented so that the SFG implementation can use this as a mean
 {
 	return EnergySpectrum(E, z, Gamma)/kCorrection(E, z, Gamma);
 }

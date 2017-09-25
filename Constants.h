@@ -5,7 +5,6 @@
 
 /* Defines some unit references and physical constants
  * And the Bounds and Measurement objects, which are used throughout the code
- * 
  */
 
 // Mass reference
@@ -39,6 +38,6 @@ const double h = H_0/100.;
 
 
 typedef std::pair<double, double> Bounds ;			// To store Integration Bounds (left, right)
-typedef std::pair<double, double> Measurement;  // value and error
+typedef std::pair<double, double> Measurement;  	// value and error
 
 #endif
