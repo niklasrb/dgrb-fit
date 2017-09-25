@@ -1,0 +1,38 @@
+Short introduction:
+I think I would look into Constants.h first, where some units and simple types are defined. 
+
+Then look at InterpolationWrapper.h, where all the interpolation classes are defined. Unfortunately their concepts differ slighty. 1D and 2D uses gsl classes, 3D is self-written trilinear interpolation from wikipedia.
+1D objects are constructed completely in the constructor and are ready immediately. 
+2D objects can be constructed immediately, but since it was annoying and timeconsuming to handle all the 2D arrays, they are usually constructed with the grid values not filled, so they are calculated afterwards. This necessitates a Initialize() call, because gsl needs it. So when there is a gsl-error about the xaxis, it is probably a missing call to that function.
+3D objects can only be constructed with empty grid values, so they need to be filled afterwards. But since gsl is not used, no initializing function is necessary.
+1D and 2D objects also offer some interaction with each other and ROOT, when it was necessary, but they don't have the same functionality, so be careful.
+
+After all the interpolation stuff, look at CosmologyModel.h, where a short class is implemented for all the various functions needed in calculation.
+
+Next up is the EBLAbsorbtionCoefficient.h (I think I misspelled absorption everywhere), which is a really simple class, and the data is actually loaded in LoadFromFiles.h.
+
+Then it's time for Source.h, where the base class for all possible sources is defined. 
+I used std::functions, so that the functions can be calculated at runtime, and the interpolation objects for these do not need to be added as a class member, but that design decision is up for debate. It makes saving/loading functionality harder to implement. I also thought about encapsulating the Intensity results in a simple struct, maybe with references to the energy bins, but so far it wasn't worth the effort.
+The AstrophysicalSource.h and class follows the formalism for these sources. Just lays out the interactions for the astrophysical sources, nothing interesting.
+There are several headers (SFG.h, FSRQ.h, MAGN.h, BLLAC.h) where the functions are actually implemented. Since the units are streamlined, the units that are used in there really need to be checked.
+Look at AngularPowerSpectrum.h and the data structure in there, which is used in the Source classes.
+
+The fun part begins in HaloModel.h, where a lot of initial calculations take place. The idea is to calc the functions in the beginning and save them in interpolation objects for all other classes to use. The grid sizes can be specified and then the Init() method calcs the grids and gives them to the other functions, that are hopefully named well enough. The Halo Mass Function kind of works, but I am unsure of where to put redshift dependencies, and where not, so maybe check that. 
+
+The DarkMatter.h just implements different type of DM models. They load the SourceDensityFT from the HaloModel. Maybe move this away from the HaloModel class and into the initialization of the DM class. (Because we also need other FTs for the galaxy catalogues and stuff, and I feel uncomfortable putting those into the HaloModel, but also uncomfortable calculating some FTs in the HaloModel and some in the individual classes. If that makes sense.)
+
+The action then happens in Benchmarking.h and .cpp. They implement the algorithm described in the thesis. Hopefully clear enough.
+
+Multinest.h is a short wrapper class for multinest, providing a cpp interface to it. First understand that, then move to dgrbFit.h
+
+Lastly, the main.cpp should then be understandable :D
+
+To Do:
+First and foremost check the units for the different astrophysical source classes. Have fun searching the literature.
+Then check the implementations in the HaloModel and the redshift dependencies in the calculations. The Source Density with Subhalo Boost FT and/or the Clumping Factor are wrong. (maybe move the FTs out of there)
+Edit the saving/loading functionality or improve the 3D interpolation algorithm, because the numerical bounds error really bother me.
+Then maybe implement the LOW/MED/HIGH cases into subclasses of AnnihilatingDM as described in Burger.
+The Benchmarking algorithms seem ok so far, but really check them, as well as the dgrbFit classes. Maybe make the Detector class obsolete and move the efficiency to the galaxy catalogs.
+The APSFit class can be edited or inherited, so that it can both fit 2FGL and 3FGL at the same time. (Maybe add a data structure to save them effectively)
+If all that gives decent results, the GalaxyCatalog classes skeletons can be included in the code. The code for the DM anisotropy can be used as a base to calculate the cross correlations with the galaxy catalogs. Then also the SeedDensityFTs for astrophysical sources needs to be calculated, but that can just be added on top.
+
